@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/RayMarching.dir/stb_image/stb_image.cpp.o CMakeFiles/RayMarching.dir/glad.c.o CMakeFiles/RayMarching.dir/RayMarching.cpp.o -o RayMarching  -lGL -ldl -lglfw 
