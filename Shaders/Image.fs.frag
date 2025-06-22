@@ -38,6 +38,25 @@ struct Surface {
     float id;      // ID para diferenciar objetos
 };
 
+// Função para rotacionar um ponto em torno do eixo X
+vec3 rotateX(vec3 p, float angle) {
+    float s = sin(angle);
+    float c = cos(angle);
+    mat2 m = mat2(c, -s, s, c);
+    
+    // Aplica a rotação 2D nas coordenadas Y e Z do ponto
+    p.yz = m * p.yz;
+    
+    // Retorna o ponto com o x original e as novas coordenadas yz
+    return p;
+}
+
+vec3 rotateY(vec3 p, float angle) {
+    float s = sin(angle); float c = cos(angle);
+    mat2 m = mat2(c, -s, s, c);
+    return vec3(m * p.xz, p.y);
+}
+
 // SDF (Signed Distance Function) para uma esfera
 float sdSphere(vec3 p, vec4 sphere) {
     return length(p - sphere.xyz) - sphere.w;
@@ -65,6 +84,24 @@ float sdRoad(vec3 p) {
 float sdVerticalCylinder(vec3 p, float h, float r) {
     vec2 d = abs(vec2(length(p.xz), p.y)) - vec2(r, h);
     return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
+}
+
+vec2 sdBook(vec3 p) {
+    // A capa é um paralelepípedo um pouco maior
+    vec3 coverSize = vec3(0.2, 1.5, 1.0);
+    float coverDist = sdBox(p, coverSize);
+
+    // As páginas são um paralelepípedo um pouco menor e recuado
+    vec3 pagesSize = vec3(0.18, 1.45, 0.98); // Ligeiramente menor que a capa
+    // Desloca as páginas um pouco para frente para criar a lombada atrás
+    float pagesDist = sdBox(p - vec3(-0.03, 0.0, 0.0), pagesSize);
+
+    // Compara as distâncias para ver qual parte está mais perto
+    if (coverDist < pagesDist) {
+        return vec2(coverDist, 1.0); // Atingiu a capa
+    } else {
+        return vec2(pagesDist, 2.0); // Atingiu as páginas
+    }
 }
 
 // Função para gerar uma árvore do tipo 1 com tronco e copa (forma arredondada)
@@ -178,6 +215,36 @@ Surface map(vec3 p) {
         }
     }
 
+
+    // Livro (usando a nova função sdBook)
+    vec3 bookPos = vec3(2.5, -0.5, 20.0);
+    float bookAngleX = 1.0 * iTime;
+    float bookAngleY = 1.0 * iTime;
+    vec3 localP_book = rotateX(p - bookPos, -bookAngleX);
+    localP_book = rotateY(localP_book, -bookAngleY);
+    vec2 bookResult = sdBook(localP_book);
+    if (bookResult.x < s.dist) {
+        s.dist = bookResult.x;
+        // Atribui cor e ID global com base no ID local retornado por sdBook
+        if (bookResult.y == 1.0) { // Se for a capa
+            s.id = 7.0;
+            s.color = vec3(0.1, 0.2, 0.7);
+        } else { // Se forem as páginas
+            s.id = 8.0;
+            s.color = vec3(0.9, 0.9, 0.85);
+        }
+    }
+
+
+    // 2. Define as Páginas (paralelepípedo menor e recuado)
+    vec3 pagesSize = vec3(0.18, 1.45, 0.98);
+    float pagesDist = sdBox(localP_book - vec3(0.01, 0.0, 0.0), pagesSize);
+    if (pagesDist < s.dist) {
+        s.dist = pagesDist;
+        s.id = 8.0; // ID para as páginas
+        s.color = vec3(0.9, 0.9, 0.85); // Cor creme para as páginas
+    }
+
     // Movimento da câmera
     float cameraZ = iTime * SPEED;
     p.z += cameraZ;
@@ -218,7 +285,7 @@ Surface map(vec3 p) {
     // 2. Calcula o número de árvores a renderizar neste frame, interpolando entre o mínimo e o máximo.
     int numTreesToRender = int(mix(float(MIN_TREES), float(MAX_TREES), densityProgress));
         
-// Árvores com surgimento suave e densidade progressiva
+    // Árvores com surgimento suave e densidade progressiva
     // ALTERADO: O loop agora itera até o máximo possível de árvores.
     for (int i = 0; i < MAX_TREES; i++) {
     
