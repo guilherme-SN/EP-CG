@@ -20,11 +20,16 @@ const float DAY_DURATION = 9.0;            // Duração de um ciclo completo dia
 const float DAY_NIGHT_RATIO = 0.5;         // Proporção do ciclo que é dia (0.0 a 1.0)
 
 // Parâmetros das árvores
-const int NUM_TREES = 15;
+//const int NUM_TREES = 15;
 const float TREE_SPACING = 15.0;
 const float TREE_START_Z = 30.0;        // Default = 30.0
 const float TREE_RISE_DISTANCE = 10.0;   // Default = 5.0
 
+// --- PARÂMETROS DE DENSIDADE DAS ÁRVORES --- // NOVO
+const int MIN_TREES = 5;                 // Número inicial de árvores a serem renderizadas.
+const int MAX_TREES = 30;                // Número máximo de árvores quando a densidade for total.
+const float DENSITY_START_TIME = 3.0;    // Em que segundo a densidade começa a aumentar.
+const float DENSITY_DURATION = 30.0;     // Duração (em segundos) da transição de poucas para muitas árvores.
 
 // Estrutura representando um objeto atingido pelo raio
 struct Surface {
@@ -32,14 +37,6 @@ struct Surface {
     vec3 color;    // Cor do objeto
     float id;      // ID para diferenciar objetos
 };
-
-// Função para rotacionar um ponto em torno do eixo Y
-vec3 rotateY(vec3 p, float angle) {
-    float s = sin(angle);
-    float c = cos(angle);
-    mat2 m = mat2(c, -s, s, c);
-    return vec3(m * p.xz, p.y);
-}
 
 // SDF (Signed Distance Function) para uma esfera
 float sdSphere(vec3 p, vec4 sphere) {
@@ -212,9 +209,22 @@ Surface map(vec3 p) {
         s.dist = d;
         s.id = 3.0;
     }
+
+
+    // --- LÓGICA DE DENSIDADE DAS ÁRVORES --- // NOVO
+    // 1. Calcula o progresso da transição de densidade (de 0.0 a 1.0).
+    float densityProgress = smoothstep(DENSITY_START_TIME, DENSITY_START_TIME + DENSITY_DURATION, iTime);
+    
+    // 2. Calcula o número de árvores a renderizar neste frame, interpolando entre o mínimo e o máximo.
+    int numTreesToRender = int(mix(float(MIN_TREES), float(MAX_TREES), densityProgress));
         
-    // Árvores com surgimento suave
-    for (int i = 0; i < NUM_TREES; i++) {
+// Árvores com surgimento suave e densidade progressiva
+    // ALTERADO: O loop agora itera até o máximo possível de árvores.
+    for (int i = 0; i < MAX_TREES; i++) {
+    
+        // ALTERADO: Pula a iteração se o índice 'i' for maior que o número de árvores a renderizar.
+        if (i >= numTreesToRender) continue;
+        
         float randomOffset = fract(sin(float(i) * 127.1) * 43758.5453) * 10.0;
         float side = (mod(float(i), 2.0) < 1.0) ? -1.0 : 1.0;
         float roadEdge = 1.5;
@@ -222,29 +232,13 @@ Surface map(vec3 p) {
         float xPos = side * (roadEdge + safeMargin + randomOffset);
 
         // --- LÓGICA DE SURGIMENTO ---
-
-        // 1. Calcular o progresso Z da árvore em seu ciclo de vida atual
         float zSpacing = TREE_SPACING * (0.8 + randomOffset * 0.4);
         float treeProgressZ = mod(cameraZ + float(i) * zSpacing, TREE_START_Z);
-
-        // 2. Calcular o fator de "subida" da árvore usando smoothstep para uma transição suave
-        // A árvore estará totalmente visível (fator=1) após percorrer TREE_RISE_DISTANCE
         float riseFactor = smoothstep(0.0, TREE_RISE_DISTANCE, treeProgressZ);
-
-        // O riseFactor será nosso growthFactor
-        float treeGrowthFactor = riseFactor * 1.3; 
-
-        // 3. Interpolar a posição Y da árvore
-        // A posição Y da árvore controla onde a base da árvore está.
-        // Se a árvore cresce, sua base "fixa" no chão, então o Y da posição geral não precisa subir tanto.
-        // Vamos manter a lógica original de Y para a posição da árvore (onde ela "nasce"),
-        // e o crescimento será tratado internamente na simpleTree.
+        float treeGrowthFactor = riseFactor * 1.3;
         float treeY = -1.5; // A base da árvore estará no chão
-
-        // 4. Montar a posição final da árvore para este frame
         float zPos = (TREE_START_Z + cameraZ) - treeProgressZ;
         vec3 treePos = vec3(xPos, treeY, zPos);
-
         // --- FIM DA LÓGICA ---
 
         // Passar o growthFactor para a função simpleTree
