@@ -22,8 +22,8 @@ const float DAY_NIGHT_RATIO = 0.5;         // Proporção do ciclo que é dia (0
 // Parâmetros das árvores
 const int NUM_TREES = 15;
 const float TREE_SPACING = 15.0;
-const float TREE_START_Z = 86.0;        // Default = 30.0
-const float TREE_RISE_DISTANCE = 70.0;   // Default = 5.0
+const float TREE_START_Z = 30.0;        // Default = 30.0
+const float TREE_RISE_DISTANCE = 10.0;   // Default = 5.0
 
 
 // Estrutura representando um objeto atingido pelo raio
@@ -71,15 +71,20 @@ float sdVerticalCylinder(vec3 p, float h, float r) {
 }
 
 // Função para gerar uma árvore do tipo 1 com tronco e copa (forma arredondada)
-Surface simpleTree(vec3 p, vec3 treePos) {
+Surface simpleTree(vec3 p, vec3 treePos, float growthFactor) { // Adicionado growthFactor
     Surface s;
     s.dist = 1e6;
     s.id = -1.0;
-    
+
     vec3 localP = (p - treePos); // Aplica escala
 
+    // Ajustar altura e raio do tronco com base no growthFactor
+    float trunkHeight = 1.5 * growthFactor;
+    float trunkRadius = 0.08 * growthFactor;
+
     // Tronco da árvore (mais fino e alto)
-    float dTrunk = sdVerticalCylinder(localP - vec3(0, 1.2, 0), 1.5, 0.08);
+    float dTrunk = sdVerticalCylinder(localP - vec3(0, 1.2 * growthFactor, 0), trunkHeight, trunkRadius);
+
     if (dTrunk < s.dist) {
         s.dist = dTrunk;
         s.color = vec3(0.35, 0.2, 0.1); // marrom mais escuro
@@ -94,16 +99,20 @@ Surface simpleTree(vec3 p, vec3 treePos) {
     foliageCenters[3] = vec3(0.3, 1.8, -0.4);
 
     for (int i = 0; i < 4; i++) {
-        float dLeaf = sdSphere(localP, vec4(foliageCenters[i], 0.7));
+        vec3 foliageCenterAdjusted = foliageCenters[i];
+        foliageCenterAdjusted.y *= growthFactor;
+
+        float dLeaf = sdSphere(localP, vec4(foliageCenterAdjusted, 0.7 * growthFactor)); // Ajustado o raio
         if (dLeaf < s.dist) {
             s.dist = dLeaf;
             s.color = vec3(0.15, 0.5, 0.15); // verde mais escuro
             s.id = 5.0;
         }
     }
-    
+
     return s;
 }
+
 
 // Função para calcular o estado dia/noite (0.0 = noite, 1.0 = dia completo)
 float getDayNightCycle(float time) {
@@ -206,33 +215,40 @@ Surface map(vec3 p) {
         
     // Árvores com surgimento suave
     for (int i = 0; i < NUM_TREES; i++) {
-        float randomOffset = fract(sin(float(i)*127.1) * 43758.5453)*10.0;
+        float randomOffset = fract(sin(float(i) * 127.1) * 43758.5453) * 10.0;
         float side = (mod(float(i), 2.0) < 1.0) ? -1.0 : 1.0;
         float roadEdge = 1.5;
         float safeMargin = 0.5;
         float xPos = side * (roadEdge + safeMargin + randomOffset);
 
         // --- LÓGICA DE SURGIMENTO ---
-        
+
         // 1. Calcular o progresso Z da árvore em seu ciclo de vida atual
         float zSpacing = TREE_SPACING * (0.8 + randomOffset * 0.4);
         float treeProgressZ = mod(cameraZ + float(i) * zSpacing, TREE_START_Z);
-        
+
         // 2. Calcular o fator de "subida" da árvore usando smoothstep para uma transição suave
         // A árvore estará totalmente visível (fator=1) após percorrer TREE_RISE_DISTANCE
         float riseFactor = smoothstep(0.0, TREE_RISE_DISTANCE, treeProgressZ);
-        
+
+        // O riseFactor será nosso growthFactor
+        float treeGrowthFactor = riseFactor * 1.3; 
+
         // 3. Interpolar a posição Y da árvore
-        // Ela começa bem abaixo do chão (ex: -20.0) e sobe até a posição final (-1.5)
-        float treeY = mix(-20.0, -1.5, riseFactor);
+        // A posição Y da árvore controla onde a base da árvore está.
+        // Se a árvore cresce, sua base "fixa" no chão, então o Y da posição geral não precisa subir tanto.
+        // Vamos manter a lógica original de Y para a posição da árvore (onde ela "nasce"),
+        // e o crescimento será tratado internamente na simpleTree.
+        float treeY = -1.5; // A base da árvore estará no chão
 
         // 4. Montar a posição final da árvore para este frame
         float zPos = (TREE_START_Z + cameraZ) - treeProgressZ;
         vec3 treePos = vec3(xPos, treeY, zPos);
-        
+
         // --- FIM DA LÓGICA ---
-        
-        Surface tree = simpleTree(p, treePos);
+
+        // Passar o growthFactor para a função simpleTree
+        Surface tree = simpleTree(p, treePos, treeGrowthFactor);
         if (tree.dist < s.dist) {
             s = tree;
         }
