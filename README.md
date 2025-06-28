@@ -21,4 +21,5 @@
     - Melhorar nome de funções e variáveis
     - Remover comentários desnecessários
     - Comentar partes principais
+    - Verificar funções sem uso
 

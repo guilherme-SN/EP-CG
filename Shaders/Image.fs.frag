@@ -26,8 +26,8 @@ const float TREE_START_Z = 30.0;        // Default = 30.0
 const float TREE_RISE_DISTANCE = 10.0;   // Default = 5.0
 
 // --- PARÂMETROS DE DENSIDADE DAS ÁRVORES --- // NOVO
-const int MIN_TREES = 5;                 // Número inicial de árvores a serem renderizadas.
-const int MAX_TREES = 30;                // Número máximo de árvores quando a densidade for total.
+const int MIN_TREES = 2;                 // Número inicial de árvores a serem renderizadas.
+const int MAX_TREES = 25;                // Número máximo de árvores quando a densidade for total.
 const float DENSITY_START_TIME = 3.0;    // Em que segundo a densidade começa a aumentar.
 const float DENSITY_DURATION = 30.0;     // Duração (em segundos) da transição de poucas para muitas árvores.
 
@@ -87,22 +87,40 @@ float sdVerticalCylinder(vec3 p, float h, float r) {
 }
 
 vec2 sdBook(vec3 p) {
-    // A capa é um paralelepípedo um pouco maior
-    vec3 coverSize = vec3(0.2, 1.5, 1.0);
-    float coverDist = sdBox(p, coverSize);
+    vec2 res = vec2(1e6, -1.0); // vec2(distancia, id)
 
-    // As páginas são um paralelepípedo um pouco menor e recuado
-    vec3 pagesSize = vec3(0.18, 1.45, 0.98); // Ligeiramente menor que a capa
-    // Desloca as páginas um pouco para frente para criar a lombada atrás
-    float pagesDist = sdBox(p - vec3(-0.03, 0.0, 0.0), pagesSize);
+    vec3 s = vec3(0.4, 0.7, 0.09); // Metade do tamanho do livro
+    float t = 0.001;             // Espessura mínima para uma face
 
-    // Compara as distâncias para ver qual parte está mais perto
-    if (coverDist < pagesDist) {
-        return vec2(coverDist, 1.0); // Atingiu a capa
-    } else {
-        return vec2(pagesDist, 2.0); // Atingiu as páginas
-    }
+    float d; // Distância temporária
+
+    // Face 1: Capa Frontal (+Z) - ID 1.0
+    d = sdBox(p - vec3(0, 0, s.z), vec3(s.x, s.y, t));
+    if (d < res.x) { res = vec2(d, 8.0); }
+
+    // Face 2: Capa Traseira (-Z) - ID 2.0
+    d = sdBox(p - vec3(0, 0, -s.z), vec3(s.x, s.y, t));
+    if (d < res.x) { res = vec2(d, 9.0); }
+
+    // Face 3: Lombada (-X) - ID 3.0
+    d = sdBox(p - vec3(-s.x, 0, 0), vec3(t, s.y, s.z));
+    if (d < res.x) { res = vec2(d, 10.0); }
+
+    // Face 4: Abertura (+X) - ID 4.0 (Páginas)
+    d = sdBox(p - vec3(s.x, 0, 0), vec3(t, s.y, s.z));
+    if (d < res.x) { res = vec2(d, 11.0); }
+
+    // Face 5: Topo (+Y) - ID 5.0 (Páginas)
+    d = sdBox(p - vec3(0, s.y, 0), vec3(s.x, t, s.z));
+    if (d < res.x) { res = vec2(d, 12.0); }
+
+    // Face 6: Base (-Y) - ID 6.0 (Páginas)
+    d = sdBox(p - vec3(0, -s.y, 0), vec3(s.x, t, s.z));
+    if (d < res.x) { res = vec2(d, 13.0); }
+
+    return res;
 }
+
 
 // Função para gerar uma árvore do tipo 1 com tronco e copa (forma arredondada)
 Surface simpleTree(vec3 p, vec3 treePos, float growthFactor) { // Adicionado growthFactor
@@ -166,7 +184,7 @@ Surface map(vec3 p) {
     float d;
         
     // Cubo no centro, surgindo lentamente do chão
-    float riseSpeed = 0.43;
+    float riseSpeed = 0.35;
     float maxY = -1.0;
     float startY = -14.0;
     float cubeY = min(maxY, startY + iTime * riseSpeed);
@@ -216,34 +234,106 @@ Surface map(vec3 p) {
     }
 
 
-    // Livro (usando a nova função sdBook)
-    vec3 bookPos = vec3(2.5, -0.5, 20.0);
-    float bookAngleX = 1.0 * iTime;
-    float bookAngleY = 1.0 * iTime;
-    vec3 localP_book = rotateX(p - bookPos, -bookAngleX);
-    localP_book = rotateY(localP_book, -bookAngleY);
-    vec2 bookResult = sdBook(localP_book);
-    if (bookResult.x < s.dist) {
-        s.dist = bookResult.x;
-        // Atribui cor e ID global com base no ID local retornado por sdBook
-        if (bookResult.y == 1.0) { // Se for a capa
-            s.id = 7.0;
-            s.color = vec3(0.1, 0.2, 0.7);
-        } else { // Se forem as páginas
-            s.id = 8.0;
-            s.color = vec3(0.9, 0.9, 0.85);
+    // Livro
+    // --- PARÂMETROS DE DENSIDADE DOS LIVROS (NOVO) ---
+    const int MIN_BOOKS = 1;         // Número inicial de livros na tela.
+    const int MAX_BOOKS = 5;        // Número máximo de livros com densidade total.
+    const float BOOK_DENSITY_START_TIME = 3.0;  // Segundo em que a densidade começa a aumentar.
+    const float BOOK_DENSITY_DURATION = 30.0; // Duração da transição.
+
+    // 1. Calcula o progresso da densidade dos livros (de 0.0 a 1.0)
+    float bookDensityProgress = smoothstep(BOOK_DENSITY_START_TIME, BOOK_DENSITY_START_TIME + BOOK_DENSITY_DURATION, iTime);
+    
+    // 2. Calcula quantos livros devem ser renderizados neste frame
+    int numBooksToRender = int(mix(float(MIN_BOOKS), float(MAX_BOOKS), bookDensityProgress));
+
+
+    // --- LOOP PARA RENDERIZAR MÚLTIPLOS LIVROS (NOVO) ---
+    for (int i = 0; i < MAX_BOOKS; i++) {
+
+        // 1. CALCULA o tempo exato em que o livro 'i' deve nascer.
+        // Distribui os nascimentos uniformemente ao longo da DURAÇÃO da densidade.
+        float birthTime = BOOK_DENSITY_START_TIME + (float(i) / float(MAX_BOOKS - 1)) * BOOK_DENSITY_DURATION;
+
+        // 2. VERIFICA se o tempo atual já passou do tempo de nascimento deste livro.
+        // Se não, o livro ainda não existe, então pulamos para o próximo.
+        if (iTime < birthTime) continue;
+
+        // 3. CALCULA o "tempo de vida" ou "cronômetro pessoal" do livro.
+        // Ele sempre começa em 0.0 no momento do nascimento.
+        float localTime = iTime - birthTime;
+
+
+        // Gera um valor aleatório único para cada livro (0.0 a 1.0)
+        // Isso garante que cada livro tenha um comportamento ligeiramente diferente.
+        float randomVal = fract(sin(float(i) * 127.1) * 43758.5453);
+
+         // --- Seleção de Cor da Capa (NOVO) ---
+        vec3 coverColor;
+        int colorIndex = int(mod(float(i), 4.0)); // Gera uma sequência: 0, 1, 2, 3, 0, 1, 2...
+
+        if (colorIndex == 0) {
+            coverColor = vec3(0.8, 0.1, 0.1); // Vermelho
+        } else if (colorIndex == 1) {
+            coverColor = vec3(0.1, 0.6, 0.2); // Verde
+        } else if (colorIndex == 2) {
+            coverColor = vec3(0.9, 0.8, 0.2); // Amarelo
+        } else {
+            coverColor = vec3(0.1, 0.2, 0.7); // Azul (o original)
+        }
+
+        // --- MOVIMENTO DO LIVRO 'i' ---
+        const float TRAVEL_DURATION = 4.0;
+        const float TRAVEL_WIDTH = 30.0;
+        const float BOBBING_SPEED = 2.5;
+        const float BOBBING_HEIGHT = 0.5;
+
+        // Usa o valor aleatório para dar a cada livro um "start time" diferente no ciclo.
+        // Assim, eles não se movem todos juntos em uma linha perfeita.
+        float timeOffset = randomVal * TRAVEL_DURATION;
+        float timeInCycle = mod(localTime + timeOffset, TRAVEL_DURATION);
+        float progress = timeInCycle / TRAVEL_DURATION;
+
+        // Calcula a posição X
+        float startX = TRAVEL_WIDTH / 2.0;
+        float endX = -TRAVEL_WIDTH / 2.0;
+        float x = mix(startX, endX, progress);
+
+        // Calcula a posição Y, com uma variação aleatória na altura base e velocidade
+        float y = sin((localTime * (0.8 + randomVal * 0.4)) * BOBBING_SPEED) * BOBBING_HEIGHT;
+
+        // Varia a profundidade (Z) de cada livro para que passem em planos diferentes
+        float z = 20.0 + (randomVal - 0.5) * 15.0;
+
+        vec3 bookPos = vec3(x, y, z);
+
+        // O resto da lógica de SDF e rotação que já tínhamos, agora dentro do loop
+        float bookAngleX = (localTime + timeOffset) * 1.0;
+        float bookAngleY = (localTime + timeOffset) * 1.0;
+        vec3 localP_book = rotateX(p - bookPos, -bookAngleX);
+        localP_book = rotateY(localP_book, -bookAngleY);    
+
+        // 1. Chamamos a nova função que testa as 6 faces individualmente
+        vec2 bookResult = sdBook(localP_book);
+
+        if (bookResult.x < s.dist) {
+            s.dist = bookResult.x;
+            s.id = 7.0; // ID geral para o objeto livro
+
+            // 2. Colorimos com base no ID da FACE retornado pela função
+            float faceID = bookResult.y;
+
+            // IDs 1.0 (Frente), 2.0 (Traseira) e 3.0 (Lombada) são azuis.
+            if (faceID == 8.0 || faceID == 9.0 || faceID == 10.0) {
+                s.color = coverColor; // MODIFICADO
+            }
+            // Todas as outras faces (4.0, 5.0, 6.0) são brancas.
+            else {
+                s.color = vec3(0.95, 0.95, 0.9); // Branco (Páginas)
+            }
         }
     }
 
-
-    // 2. Define as Páginas (paralelepípedo menor e recuado)
-    vec3 pagesSize = vec3(0.18, 1.45, 0.98);
-    float pagesDist = sdBox(localP_book - vec3(0.01, 0.0, 0.0), pagesSize);
-    if (pagesDist < s.dist) {
-        s.dist = pagesDist;
-        s.id = 8.0; // ID para as páginas
-        s.color = vec3(0.9, 0.9, 0.85); // Cor creme para as páginas
-    }
 
     // Movimento da câmera
     float cameraZ = iTime * SPEED;
@@ -443,14 +533,6 @@ void main() {
         // Objetos com iluminação adaptativa
         float diffuse = getSunLight(ro + rd * s.dist, dayAmount);
         float ambient = mix(0.2, 0.05, dayAmount);
-        
-        // Ajuste de cor baseado no tipo de objeto
-        //if (s.id >= 4.0 && s.id <= 7.0) { // Se for árvore
-            // Adiciona variação de cor às árvores
-            //float colorVar = fract(sin(s.dist) * 43758.5453) * 0.2;
-            //s.color.r += colorVar * 0.5;
-            //s.color.g += colorVar;
-        //}
         
         color = s.color * (diffuse + ambient);
     }
