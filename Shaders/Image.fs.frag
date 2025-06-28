@@ -121,6 +121,67 @@ vec2 sdBook(vec3 p) {
     return res;
 }
 
+// Retorna a distância e o ID do material da parte mais próxima do bolo.
+vec2 sdCake(vec3 p) {
+    vec2 res = vec2(1e6, -1.0);
+
+    // --- Fator de Escala para o Bolo (NOVO) ---
+    float scale = 1.5; // Aumenta o tamanho geral em 50%
+
+    // --- Dimensões do Bolo (agora multiplicadas pela escala) ---
+    float plateRadius = 1.2 * scale;
+    float plateHeight = 0.05 * scale;
+
+    float layer1Radius = 0.9 * scale;
+    float layer1Height = 0.4 * scale;
+    
+    float layer2Radius = 0.6 * scale;
+    float layer2Height = 0.3 * scale;
+
+    float frostingThickness = 0.03 * scale;
+
+    // --- 1. O Prato ---
+    float d = sdVerticalCylinder(p - vec3(0, -layer1Height - layer2Height - plateHeight, 0), plateHeight, plateRadius);
+    if (d < res.x) { res = vec2(d, 20.0); }
+
+    // --- 2. Camada Inferior do Bolo ---
+    d = sdVerticalCylinder(p - vec3(0, -layer2Height - layer1Height/2.0, 0), layer1Height/2.0, layer1Radius);
+    if (d < res.x) { res = vec2(d, 21.0); }
+
+    // Cobertura da Camada Inferior
+    d = sdVerticalCylinder(p - vec3(0, -layer2Height, 0), frostingThickness, layer1Radius + frostingThickness);
+    if (d < res.x) { res = vec2(d, 22.0); }
+
+    // --- 3. Camada Superior do Bolo ---
+    d = sdVerticalCylinder(p - vec3(0, -layer2Height/2.0, 0), layer2Height/2.0, layer2Radius);
+    if (d < res.x) { res = vec2(d, 21.0); }
+
+    // Cobertura da Camada Superior
+    d = sdVerticalCylinder(p, frostingThickness, layer2Radius + frostingThickness);
+    if (d < res.x) { res = vec2(d, 22.0); }
+
+    // --- 4. Velas ---
+    const int NUM_CANDLES = 5;
+    for (int i = 0; i < NUM_CANDLES; i++) {
+        float angle = float(i) / float(NUM_CANDLES) * 2.0 * PI;
+        float candleRingRadius = layer2Radius * 0.6;
+        
+        vec3 candlePos = vec3(cos(angle) * candleRingRadius, 0.0, sin(angle) * candleRingRadius);
+        vec3 localP_candle = p - candlePos;
+
+        float candleHeight = 0.2 * scale;
+        float candleRadius = 0.03 * scale;
+        float flameRadius = 0.03 * scale;
+        d = sdVerticalCylinder(localP_candle - vec3(0, candleHeight, 0), candleHeight, candleRadius);
+        if (d < res.x) { res = vec2(d, 23.0); }
+        
+        d = sdSphere(localP_candle, vec4(0, candleHeight * 2.0 + 0.02 * scale, 0, flameRadius));
+        if (d < res.x) { res = vec2(d, 24.0); }
+    }
+
+    return res;
+}
+
 
 // Função para gerar uma árvore do tipo 1 com tronco e copa (forma arredondada)
 Surface simpleTree(vec3 p, vec3 treePos, float growthFactor) { // Adicionado growthFactor
@@ -330,6 +391,53 @@ Surface map(vec3 p) {
             // Todas as outras faces (4.0, 5.0, 6.0) são brancas.
             else {
                 s.color = vec3(0.95, 0.95, 0.9); // Branco (Páginas)
+            }
+        }
+    }
+
+    
+    // Bolo
+    // --- Parâmetros da Animação do Bolo ---
+    const float CAKE_APPEAR_TIME = 35.0; 
+    const float CAKE_DROP_DURATION = 6.0;
+
+    float descentFactor = smoothstep(CAKE_APPEAR_TIME, CAKE_APPEAR_TIME + CAKE_DROP_DURATION, iTime);
+
+    if (descentFactor > 0.0) {
+        // Posição inicial (no céu) e final (no meio da tela)
+        float startY = 10.0; // Posição inicial bem alta
+        float endY = 2.0;    // ALTERADO: Posição final mais alta, no "meio"
+
+        float cakeY = mix(startY, endY, descentFactor);
+        vec3 cakePos = vec3(0.0, cakeY, 15.0);
+
+        vec3 localP_cake = p - cakePos;
+
+        // --- CORREÇÃO DE ROTAÇÃO ---
+        
+        // Rotação suave em torno de seu próprio eixo Y
+        localP_cake = rotateY(localP_cake, iTime * 1.2);
+
+        // NOVO: Rotaciona o bolo 90 graus no eixo X para deixá-lo "em pé" corretamente.
+        localP_cake = rotateX(localP_cake, (PI + 0.1) / 2.0);
+
+        vec2 cakeResult = sdCake(localP_cake);
+
+        if (cakeResult.x < s.dist) {
+            s.dist = cakeResult.x;
+            s.id = cakeResult.y; // O ID do material (prato, massa, cobertura...)
+            
+            // --- Coloração do Bolo ---
+            if (s.id == 20.0) {       // Prato
+                s.color = vec3(0.8, 0.8, 0.9);
+            } else if (s.id == 21.0) { // Massa do bolo
+                s.color = vec3(0.85, 0.7, 0.45);
+            } else if (s.id == 22.0) { // Cobertura
+                s.color = vec3(0.95, 0.9, 0.92); // Cobertura branca
+            } else if (s.id == 23.0) { // Cera da Vela
+                s.color = vec3(0.9, 0.2, 0.2); // Vela vermelha
+            } else if (s.id == 24.0) { // Chama
+                s.color = vec3(1.0, 0.7, 0.1) * 1.5; // Laranja/amarelo brilhante
             }
         }
     }
