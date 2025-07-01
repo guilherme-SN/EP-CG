@@ -8,29 +8,36 @@ uniform vec2 iResolution;
 uniform int iFrame;
 out vec4 C;
 
+
+// ====================================================
+//                     CONSTANTES
+// ====================================================
 const float PI = 3.1459;
 
+// Parâmetros gerais
 const int MAX_STEPS = 100;               // Número máximo de iterações do ray marching
-const float MAX_DISTANCE = 80.0;           // Distância máxima que o raio pode percorrer
-const float MIN_DISTANCE = 0.01;           // Distância mínima para considerar uma colisão
-const float SPEED = 4.0;                   // Velocidade da "câmera" indo para frente
+const float MAX_DISTANCE = 80.0;         // Distância máxima que o raio pode percorrer
+const float MIN_DISTANCE = 0.01;         // Distância mínima para considerar uma colisão
+const float SPEED = 4.0;                 // Velocidade da câmera indo para frente
 
 // Parâmetros do ciclo dia/noite
-const float DAY_DURATION = 9.0;            // Duração de um ciclo completo dia+noite em segundos
-const float DAY_NIGHT_RATIO = 0.5;         // Proporção do ciclo que é dia (0.0 a 1.0)
+const float DAY_DURATION = 9.0;          // Duração de um ciclo completo dia+noite em segundos
+const float DAY_NIGHT_RATIO = 0.5;       // Proporção do ciclo que é dia (0.0 a 1.0)
 
 // Parâmetros das árvores
-//const int NUM_TREES = 15;
-const float TREE_SPACING = 15.0;
-const float TREE_START_Z = 30.0;        // Default = 30.0
-const float TREE_RISE_DISTANCE = 10.0;   // Default = 5.0
+const float TREE_SPACING = 15.0;         // Espaçamento das árvores
+const float TREE_START_Z = 30.0;         // Posição Z inicial em que as árvores devem surgir
+const float TREE_RISE_DISTANCE = 10.0;   // Distância que a árvore leva para crescer completamente
+const int MIN_TREES = 2;                 // Número inicial de árvores a serem renderizadas
+const int MAX_TREES = 25;                // Número máximo de árvores
+const float DENSITY_START_TIME = 3.0;    // Segundo a densidade começa a aumentar
+const float DENSITY_DURATION = 30.0;     // Duração (em segundos) da transição de poucas para muitas árvores
 
-// --- PARÂMETROS DE DENSIDADE DAS ÁRVORES --- // NOVO
-const int MIN_TREES = 2;                 // Número inicial de árvores a serem renderizadas.
-const int MAX_TREES = 25;                // Número máximo de árvores quando a densidade for total.
-const float DENSITY_START_TIME = 3.0;    // Em que segundo a densidade começa a aumentar.
-const float DENSITY_DURATION = 30.0;     // Duração (em segundos) da transição de poucas para muitas árvores.
 
+
+// ====================================================
+//                    ESTRUTURAS
+// ====================================================
 // Estrutura representando um objeto atingido pelo raio
 struct Surface {
     float dist;    // Distância da interseção
@@ -38,6 +45,11 @@ struct Surface {
     float id;      // ID para diferenciar objetos
 };
 
+
+
+// ====================================================
+//                 FUNÇÕES DE ROTAÇÃO
+// ====================================================
 // Função para rotacionar um ponto em torno do eixo X
 vec3 rotateX(vec3 p, float angle) {
     float s = sin(angle);
@@ -57,6 +69,11 @@ vec3 rotateY(vec3 p, float angle) {
     return vec3(m * p.xz, p.y);
 }
 
+
+
+// ====================================================
+//              SIGNED DISTANCE FUNCTIONS
+// ====================================================
 // SDF (Signed Distance Function) para uma esfera
 float sdSphere(vec3 p, vec4 sphere) {
     return length(p - sphere.xyz) - sphere.w;
@@ -182,9 +199,8 @@ vec2 sdCake(vec3 p) {
     return res;
 }
 
-
 // Função para gerar uma árvore do tipo 1 com tronco e copa (forma arredondada)
-Surface simpleTree(vec3 p, vec3 treePos, float growthFactor) { // Adicionado growthFactor
+Surface sdTree(vec3 p, vec3 treePos, float growthFactor) { // Adicionado growthFactor
     Surface s;
     s.dist = 1e6;
     s.id = -1.0;
@@ -227,15 +243,10 @@ Surface simpleTree(vec3 p, vec3 treePos, float growthFactor) { // Adicionado gro
 }
 
 
-// Função para calcular o estado dia/noite (0.0 = noite, 1.0 = dia completo)
-float getDayNightCycle(float time) {
-    float cyclePos = mod(time, DAY_DURATION) / DAY_DURATION;
-    float dayAmount = smoothstep(0.0, 0.1, cyclePos) - 
-                     smoothstep(DAY_NIGHT_RATIO, DAY_NIGHT_RATIO+0.1, cyclePos);
-    return dayAmount;
-}
 
-
+// ====================================================
+//            MAPEAMENTO DOS OBJETOS NA CENA
+// ====================================================
 // Função de mapeamento que calcula a menor distância de p para qualquer objeto
 Surface map(vec3 p) {
     Surface s;
@@ -450,7 +461,7 @@ Surface map(vec3 p) {
     const float SIGN_DROP_DURATION = 3.0;     // Duração da animação de queda.
 
 
- // Usa a mesma lógica do bolo, mas com os tempos que definimos para a placa.
+    // Usa a mesma lógica do bolo, mas com os tempos que definimos para a placa.
     float signDescentFactor = smoothstep(SIGN_APPEAR_TIME, SIGN_APPEAR_TIME + SIGN_DROP_DURATION, iTime);
 
     // Otimização: Só processa a placa se a animação dela já tiver começado.
@@ -561,8 +572,8 @@ Surface map(vec3 p) {
         vec3 treePos = vec3(xPos, treeY, zPos);
         // --- FIM DA LÓGICA ---
 
-        // Passar o growthFactor para a função simpleTree
-        Surface tree = simpleTree(p, treePos, treeGrowthFactor);
+        // Passar o growthFactor para a função sdTree
+        Surface tree = sdTree(p, treePos, treeGrowthFactor);
         if (tree.dist < s.dist) {
             s = tree;
         }
@@ -572,6 +583,10 @@ Surface map(vec3 p) {
 }
 
 
+
+// ====================================================
+//                FUNÇÕES AUXILIARES
+// ====================================================
 // Algoritmo principal de ray marching
 Surface rayMarch(vec3 ro, vec3 rd) {
     float totalDist = 0.0;
@@ -668,6 +683,19 @@ vec3 skyColor(vec3 rd, float dayAmount) {
     return mix(bottomColor, topColor, t);
 }
 
+// Função para calcular o estado dia/noite (0.0 = noite, 1.0 = dia completo)
+float getDayNightCycle(float time) {
+    float cyclePos = mod(time, DAY_DURATION) / DAY_DURATION;
+    float dayAmount = smoothstep(0.0, 0.1, cyclePos) - 
+                     smoothstep(DAY_NIGHT_RATIO, DAY_NIGHT_RATIO+0.1, cyclePos);
+    return dayAmount;
+}
+
+
+
+// ====================================================
+//                 FUNÇÃO PRINCIPAL
+// ====================================================
 // Função principal que renderiza cada pixel
 void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
