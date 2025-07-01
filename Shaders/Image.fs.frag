@@ -126,7 +126,7 @@ vec2 sdCake(vec3 p) {
     vec2 res = vec2(1e6, -1.0);
 
     // --- Fator de Escala para o Bolo (NOVO) ---
-    float scale = 1.5; // Aumenta o tamanho geral em 50%
+    float scale = 0.6; // Aumenta o tamanho geral em 50%
 
     // --- Dimensões do Bolo (agora multiplicadas pela escala) ---
     float plateRadius = 1.2 * scale;
@@ -406,10 +406,10 @@ Surface map(vec3 p) {
     if (descentFactor > 0.0) {
         // Posição inicial (no céu) e final (no meio da tela)
         float startY = 10.0; // Posição inicial bem alta
-        float endY = 2.0;    // ALTERADO: Posição final mais alta, no "meio"
+        float endY = 0.4;    // ALTERADO: Posição final mais alta, no "meio"
 
         float cakeY = mix(startY, endY, descentFactor);
-        vec3 cakePos = vec3(0.0, cakeY, 15.0);
+        vec3 cakePos = vec3(0.0, cakeY, 5.0);
 
         vec3 localP_cake = p - cakePos;
 
@@ -438,6 +438,61 @@ Surface map(vec3 p) {
                 s.color = vec3(0.9, 0.2, 0.2); // Vela vermelha
             } else if (s.id == 24.0) { // Chama
                 s.color = vec3(1.0, 0.7, 0.1) * 1.5; // Laranja/amarelo brilhante
+            }
+        }
+    }
+
+
+    // Placa - 20 anos EACH
+
+    // --- PARÂMETROS DE ANIMAÇÃO DA PLACA ---
+    const float SIGN_APPEAR_TIME = 35.5;      // Em segundos. Inicia meio segundo depois do bolo para dar um efeito legal.
+    const float SIGN_DROP_DURATION = 3.0;     // Duração da animação de queda.
+
+
+ // Usa a mesma lógica do bolo, mas com os tempos que definimos para a placa.
+    float signDescentFactor = smoothstep(SIGN_APPEAR_TIME, SIGN_APPEAR_TIME + SIGN_DROP_DURATION, iTime);
+
+    // Otimização: Só processa a placa se a animação dela já tiver começado.
+    if (signDescentFactor > 0.0) {
+        
+        // 2. DEFINE AS POSIÇÕES INICIAL E FINAL DA ANIMAÇÃO
+        float startY = 12.0;  // Posição inicial Y, bem alta no céu.
+        float endY = 3.0;     // Posição final Y (a que você já tinha definido).
+
+        // 3. CALCULA A POSIÇÃO ATUAL USANDO INTERPOLAÇÃO (mix)
+        // 'mix' vai mover de startY para endY conforme 'signDescentFactor' vai de 0 para 1.
+        float currentY = mix(startY, endY, signDescentFactor);
+        
+        // Posição final da placa, agora com o Y dinâmico.
+        vec3 outdoorPos = vec3(0.0, currentY, 10.0);
+
+        // --- A PARTIR DAQUI, O SEU CÓDIGO ORIGINAL E FUNCIONAL É APLICADO ---
+        vec3 outdoorSize = vec3(6.0, 1.5, 0.1);
+        vec3 localP_outdoor = p - outdoorPos;
+        d = sdBox(localP_outdoor, outdoorSize);
+
+        if (d < s.dist) {
+            s.id = 30.0;
+            
+            vec3 defaultColor = vec3(0.2);
+
+            if (abs(localP_outdoor.z + outdoorSize.z) < 0.01) {
+                float u = (localP_outdoor.x + outdoorSize.x) / (2.0 * outdoorSize.x);
+                float v = (localP_outdoor.y + outdoorSize.y) / (2.0 * outdoorSize.y);
+                vec2 uv = vec2(u, 1.0 - v);
+                vec4 texColor = texture(iChannel3, uv);
+
+                if (texColor.a < 0.5) {
+                    s.dist = d;
+                    s.color = vec3(0.1, 0.1, 0.1);
+                } else {
+                    s.dist = d;
+                    s.color = texColor.rgb;
+                }
+            } else {
+                s.dist = d;
+                s.color = defaultColor;
             }
         }
     }

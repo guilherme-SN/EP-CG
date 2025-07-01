@@ -213,6 +213,7 @@ int main()
     unsigned int iChannel_0;
     unsigned int imageTexture0 = loadTexture("../textures/grama2.png");
     unsigned int imageTexture1 = loadTexture("../textures/mosaico.png");
+    unsigned int imageTexture2 = loadTexture("../textures/20anos.png");
     glGenTextures(1, &iChannel_0);
     glBindTexture(GL_TEXTURE_2D, iChannel_0);
 
@@ -428,8 +429,12 @@ int main()
             glBindTexture(GL_TEXTURE_2D, imageTexture0);
 
             Imageprogram.setSampler("iChannel2", 2);
-                glActiveTexture(GL_TEXTURE2);
+            glActiveTexture(GL_TEXTURE2);
             glBindTexture(GL_TEXTURE_2D, imageTexture1);
+
+            Imageprogram.setSampler("iChannel3", 3);
+            glActiveTexture(GL_TEXTURE3);
+            glBindTexture(GL_TEXTURE_2D, imageTexture2);
 
             //glActiveTexture(GL_TEXTURE1);
             //glBindTexture(GL_TEXTURE_2D, iChannel_3);
