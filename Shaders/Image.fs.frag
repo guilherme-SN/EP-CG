@@ -24,21 +24,12 @@ const float SPEED = 4.0;                 // Velocidade da câmera indo para fren
 const float DAY_DURATION = 9.0;          // Duração de um ciclo completo dia+noite em segundos
 const float DAY_NIGHT_RATIO = 0.5;       // Proporção do ciclo que é dia (0.0 a 1.0)
 
-// Parâmetros das árvores
-const float TREE_SPACING = 15.0;         // Espaçamento das árvores
-const float TREE_START_Z = 30.0;         // Posição Z inicial em que as árvores devem surgir
-const float TREE_RISE_DISTANCE = 10.0;   // Distância que a árvore leva para crescer completamente
-const int MIN_TREES = 2;                 // Número inicial de árvores a serem renderizadas
-const int MAX_TREES = 25;                // Número máximo de árvores
-const float DENSITY_START_TIME = 3.0;    // Segundo a densidade começa a aumentar
-const float DENSITY_DURATION = 30.0;     // Duração (em segundos) da transição de poucas para muitas árvores
-
 
 
 // ====================================================
 //                    ESTRUTURAS
 // ====================================================
-// Estrutura representando um objeto atingido pelo raio
+// Estrutura que representa objeto atingido pelo raymarching
 struct Surface {
     float dist;    // Distância da interseção
     vec3 color;    // Cor do objeto
@@ -50,22 +41,21 @@ struct Surface {
 // ====================================================
 //                 FUNÇÕES DE ROTAÇÃO
 // ====================================================
-// Função para rotacionar um ponto em torno do eixo X
 vec3 rotateX(vec3 p, float angle) {
     float s = sin(angle);
     float c = cos(angle);
     mat2 m = mat2(c, -s, s, c);
-    
-    // Aplica a rotação 2D nas coordenadas Y e Z do ponto
+
     p.yz = m * p.yz;
-    
-    // Retorna o ponto com o x original e as novas coordenadas yz
+
     return p;
 }
 
 vec3 rotateY(vec3 p, float angle) {
-    float s = sin(angle); float c = cos(angle);
+    float s = sin(angle); 
+    float c = cos(angle);
     mat2 m = mat2(c, -s, s, c);
+
     return vec3(m * p.xz, p.y);
 }
 
@@ -74,78 +64,85 @@ vec3 rotateY(vec3 p, float angle) {
 // ====================================================
 //              SIGNED DISTANCE FUNCTIONS
 // ====================================================
-// SDF (Signed Distance Function) para uma esfera
+// Esfera
 float sdSphere(vec3 p, vec4 sphere) {
     return length(p - sphere.xyz) - sphere.w;
 }
 
-// SDF de um cubo centrado na origem com tamanho dado por "b"
+
+// Cubo
 float sdBox(vec3 p, vec3 b) {
     vec3 d = abs(p) - b;
     return length(max(d, 0.0)) + min(max(d.x, max(d.y, d.z)), 0.0);
 }
 
-// SDF para um plano horizontal
+
+// Plano horizontal
 float sdPlane(vec3 p) {
-    return p.y + 1.5; // plano em y = -1.5
+    return p.y + 1.5;
 }
 
-// SDF da estrada, representada como um retângulo achatado
+
+// Estrada (retângulo achatado)
 float sdRoad(vec3 p) {
-    vec2 size = vec2(1.5, 0.01); // largura e espessura da estrada
+    vec2 size = vec2(1.5, 0.01);    // largura e espessura da estrada
     vec2 d = abs(vec2(p.x, p.y + 1.5)) - size;
+
     return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
 }
 
-// SDF de um cilindro vertical (tronco da árvore)
+
+// Cilindro vertical
 float sdVerticalCylinder(vec3 p, float h, float r) {
     vec2 d = abs(vec2(length(p.xz), p.y)) - vec2(r, h);
     return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
 }
 
+
+// Livro
 vec2 sdBook(vec3 p) {
-    vec2 res = vec2(1e6, -1.0); // vec2(distancia, id)
+    vec2 res = vec2(1e6, -1.0);     // Distância e ID
 
-    vec3 s = vec3(0.4, 0.7, 0.09); // Metade do tamanho do livro
-    float t = 0.001;             // Espessura mínima para uma face
+    vec3 s = vec3(0.4, 0.7, 0.09);
+    float t = 0.001;
 
-    float d; // Distância temporária
+    float d;
 
-    // Face 1: Capa Frontal (+Z) - ID 1.0
+    // Face 1: Capa Frontal (+Z) - ID 8.0
     d = sdBox(p - vec3(0, 0, s.z), vec3(s.x, s.y, t));
-    if (d < res.x) { res = vec2(d, 8.0); }
+    if (d < res.x) res = vec2(d, 8.0);
 
-    // Face 2: Capa Traseira (-Z) - ID 2.0
+    // Face 2: Capa Traseira (-Z) - ID 9.0
     d = sdBox(p - vec3(0, 0, -s.z), vec3(s.x, s.y, t));
-    if (d < res.x) { res = vec2(d, 9.0); }
+    if (d < res.x) res = vec2(d, 9.0);
 
-    // Face 3: Lombada (-X) - ID 3.0
+    // Face 3: Lombada (-X) - ID 10.0
     d = sdBox(p - vec3(-s.x, 0, 0), vec3(t, s.y, s.z));
-    if (d < res.x) { res = vec2(d, 10.0); }
+    if (d < res.x) res = vec2(d, 10.0);
 
-    // Face 4: Abertura (+X) - ID 4.0 (Páginas)
+    // Face 4: Páginas lateral (+X) - ID 11.0
     d = sdBox(p - vec3(s.x, 0, 0), vec3(t, s.y, s.z));
-    if (d < res.x) { res = vec2(d, 11.0); }
+    if (d < res.x) res = vec2(d, 11.0);
 
-    // Face 5: Topo (+Y) - ID 5.0 (Páginas)
+    // Face 5: Páginas topo (+Y) - ID 12.0
     d = sdBox(p - vec3(0, s.y, 0), vec3(s.x, t, s.z));
-    if (d < res.x) { res = vec2(d, 12.0); }
+    if (d < res.x) res = vec2(d, 12.0);
 
-    // Face 6: Base (-Y) - ID 6.0 (Páginas)
+    // Face 6: Páginas base (-Y) - ID 13.0
     d = sdBox(p - vec3(0, -s.y, 0), vec3(s.x, t, s.z));
-    if (d < res.x) { res = vec2(d, 13.0); }
+    if (d < res.x) res = vec2(d, 13.0);
 
     return res;
 }
 
-// Retorna a distância e o ID do material da parte mais próxima do bolo.
+
+// Bolo
 vec2 sdCake(vec3 p) {
     vec2 res = vec2(1e6, -1.0);
 
-    // --- Fator de Escala para o Bolo (NOVO) ---
-    float scale = 0.6; // Aumenta o tamanho geral em 50%
+    float scale = 0.6;      // Fator de escala do bolo
 
-    // --- Dimensões do Bolo (agora multiplicadas pela escala) ---
+    // Dimensões do bolo
     float plateRadius = 1.2 * scale;
     float plateHeight = 0.05 * scale;
 
@@ -155,29 +152,30 @@ vec2 sdCake(vec3 p) {
     float layer2Radius = 0.6 * scale;
     float layer2Height = 0.3 * scale;
 
-    float frostingThickness = 0.03 * scale;
+    float coverThickness = 0.03 * scale;
 
-    // --- 1. O Prato ---
+
+    // Prato
     float d = sdVerticalCylinder(p - vec3(0, -layer1Height - layer2Height - plateHeight, 0), plateHeight, plateRadius);
-    if (d < res.x) { res = vec2(d, 20.0); }
+    if (d < res.x) res = vec2(d, 20.0);
 
-    // --- 2. Camada Inferior do Bolo ---
+    // Camada 1 do bolo
     d = sdVerticalCylinder(p - vec3(0, -layer2Height - layer1Height/2.0, 0), layer1Height/2.0, layer1Radius);
-    if (d < res.x) { res = vec2(d, 21.0); }
+    if (d < res.x) res = vec2(d, 21.0);
 
-    // Cobertura da Camada Inferior
-    d = sdVerticalCylinder(p - vec3(0, -layer2Height, 0), frostingThickness, layer1Radius + frostingThickness);
-    if (d < res.x) { res = vec2(d, 22.0); }
+    // Cobertura da camada 1
+    d = sdVerticalCylinder(p - vec3(0, -layer2Height, 0), coverThickness, layer1Radius + coverThickness);
+    if (d < res.x) res = vec2(d, 22.0);
 
-    // --- 3. Camada Superior do Bolo ---
+    // Camada 2 do bolo
     d = sdVerticalCylinder(p - vec3(0, -layer2Height/2.0, 0), layer2Height/2.0, layer2Radius);
-    if (d < res.x) { res = vec2(d, 21.0); }
+    if (d < res.x) res = vec2(d, 21.0);
 
-    // Cobertura da Camada Superior
-    d = sdVerticalCylinder(p, frostingThickness, layer2Radius + frostingThickness);
-    if (d < res.x) { res = vec2(d, 22.0); }
+    // Cobertura da camada 2
+    d = sdVerticalCylinder(p, coverThickness, layer2Radius + coverThickness);
+    if (d < res.x) res = vec2(d, 22.0);
 
-    // --- 4. Velas ---
+    // Velas
     const int NUM_CANDLES = 5;
     for (int i = 0; i < NUM_CANDLES; i++) {
         float angle = float(i) / float(NUM_CANDLES) * 2.0 * PI;
@@ -190,37 +188,37 @@ vec2 sdCake(vec3 p) {
         float candleRadius = 0.03 * scale;
         float flameRadius = 0.03 * scale;
         d = sdVerticalCylinder(localP_candle - vec3(0, candleHeight, 0), candleHeight, candleRadius);
-        if (d < res.x) { res = vec2(d, 23.0); }
+        if (d < res.x) res = vec2(d, 23.0);
         
         d = sdSphere(localP_candle, vec4(0, candleHeight * 2.0 + 0.02 * scale, 0, flameRadius));
-        if (d < res.x) { res = vec2(d, 24.0); }
+        if (d < res.x) res = vec2(d, 24.0);
     }
 
     return res;
 }
 
-// Função para gerar uma árvore do tipo 1 com tronco e copa (forma arredondada)
-Surface sdTree(vec3 p, vec3 treePos, float growthFactor) { // Adicionado growthFactor
+
+// Árvore
+Surface sdTree(vec3 p, vec3 treePos, float growthFactor) {
     Surface s;
     s.dist = 1e6;
     s.id = -1.0;
 
-    vec3 localP = (p - treePos); // Aplica escala
+    vec3 localP = (p - treePos);
 
-    // Ajustar altura e raio do tronco com base no growthFactor
     float trunkHeight = 1.5 * growthFactor;
     float trunkRadius = 0.08 * growthFactor;
 
-    // Tronco da árvore (mais fino e alto)
+    // Tronco da árvore
     float dTrunk = sdVerticalCylinder(localP - vec3(0, 1.2 * growthFactor, 0), trunkHeight, trunkRadius);
 
     if (dTrunk < s.dist) {
         s.dist = dTrunk;
-        s.color = vec3(0.35, 0.2, 0.1); // marrom mais escuro
+        s.color = vec3(0.35, 0.2, 0.1);
         s.id = 4.0;
     }
 
-    // Copa da árvore formada por esferas
+    // Copa da árvore (esferas)
     vec3 foliageCenters[4];
     foliageCenters[0] = vec3(0, 2.5, 0);
     foliageCenters[1] = vec3(0.5, 2.0, 0.3);
@@ -231,10 +229,10 @@ Surface sdTree(vec3 p, vec3 treePos, float growthFactor) { // Adicionado growthF
         vec3 foliageCenterAdjusted = foliageCenters[i];
         foliageCenterAdjusted.y *= growthFactor;
 
-        float dLeaf = sdSphere(localP, vec4(foliageCenterAdjusted, 0.7 * growthFactor)); // Ajustado o raio
+        float dLeaf = sdSphere(localP, vec4(foliageCenterAdjusted, 0.7 * growthFactor));
         if (dLeaf < s.dist) {
             s.dist = dLeaf;
-            s.color = vec3(0.15, 0.5, 0.15); // verde mais escuro
+            s.color = vec3(0.15, 0.5, 0.15);
             s.id = 5.0;
         }
     }
@@ -247,15 +245,16 @@ Surface sdTree(vec3 p, vec3 treePos, float growthFactor) { // Adicionado growthF
 // ====================================================
 //            MAPEAMENTO DOS OBJETOS NA CENA
 // ====================================================
-// Função de mapeamento que calcula a menor distância de p para qualquer objeto
 Surface map(vec3 p) {
     Surface s;
     s.dist = 1e6;
     s.id = -1.0;
 
     float d;
-        
-    // Cubo no centro, surgindo lentamente do chão
+
+    // ****************************
+    //       ELEFANTE BRANCO
+    // ****************************
     float riseSpeed = 0.35;
     float maxY = -1.0;
     float startY = -14.0;
@@ -266,8 +265,7 @@ Surface map(vec3 p) {
     vec3 localP = p - cubePos;
 
     float rotationAngle = -0.5;
-    mat2 rotationMatrix = mat2(cos(rotationAngle), -sin(rotationAngle),
-                               sin(rotationAngle),  cos(rotationAngle));
+    mat2 rotationMatrix = mat2(cos(rotationAngle), -sin(rotationAngle), sin(rotationAngle),  cos(rotationAngle));
 
     localP.xz = rotationMatrix * localP.xz;
 
@@ -283,21 +281,27 @@ Surface map(vec3 p) {
         s.id = 6.0;
         s.dist = d;
     }
-        
-    // Lógica da Lua
+
+
+
+    // ****************************
+    //            LUA
+    // ****************************
     float cyclePos = mod(iTime, DAY_DURATION) / DAY_DURATION;
     float nightProgress = clamp((cyclePos - DAY_NIGHT_RATIO) / (1.0 - DAY_NIGHT_RATIO), 0.0, 1.0);
     if (nightProgress > 0.0) {
-        float horizonY   = -3.5;
-        float peakY      = 12.0; 
+        float horizonY = -3.5;
+        float peakY = 12.0; 
         float arcRadiusX = 22.0;
-        const float PI = 3.14159265359;
         float angle = nightProgress * PI;
+
         vec3 moonPos;
         moonPos.x = cos(angle) * arcRadiusX;
         moonPos.y = mix(horizonY, peakY, sin(angle));
         moonPos.z = 35.0;
+
         d = sdSphere(p, vec4(moonPos, 1.5));
+
         if (d < s.dist) {
             s.dist = d;
             s.color = vec3(0.9, 0.9, 0.7);
@@ -305,44 +309,30 @@ Surface map(vec3 p) {
         }
     }
 
+    // ****************************
+    //           LIVRO
+    // ****************************
+    // Parâmetros dos livros
+    const int MIN_BOOKS = 1;                    // Número inicial de livros
+    const int MAX_BOOKS = 5;                    // Número máximo de livros
+    const float BOOK_DENSITY_START_TIME = 3.0;  // Segundo em que a densidade começa a aumentar
+    const float BOOK_DENSITY_DURATION = 30.0;   // Duração da transição
 
-    // Livro
-    // --- PARÂMETROS DE DENSIDADE DOS LIVROS (NOVO) ---
-    const int MIN_BOOKS = 1;         // Número inicial de livros na tela.
-    const int MAX_BOOKS = 5;        // Número máximo de livros com densidade total.
-    const float BOOK_DENSITY_START_TIME = 3.0;  // Segundo em que a densidade começa a aumentar.
-    const float BOOK_DENSITY_DURATION = 30.0; // Duração da transição.
-
-    // 1. Calcula o progresso da densidade dos livros (de 0.0 a 1.0)
     float bookDensityProgress = smoothstep(BOOK_DENSITY_START_TIME, BOOK_DENSITY_START_TIME + BOOK_DENSITY_DURATION, iTime);
     
-    // 2. Calcula quantos livros devem ser renderizados neste frame
     int numBooksToRender = int(mix(float(MIN_BOOKS), float(MAX_BOOKS), bookDensityProgress));
 
-
-    // --- LOOP PARA RENDERIZAR MÚLTIPLOS LIVROS (NOVO) ---
     for (int i = 0; i < MAX_BOOKS; i++) {
-
-        // 1. CALCULA o tempo exato em que o livro 'i' deve nascer.
-        // Distribui os nascimentos uniformemente ao longo da DURAÇÃO da densidade.
         float birthTime = BOOK_DENSITY_START_TIME + (float(i) / float(MAX_BOOKS - 1)) * BOOK_DENSITY_DURATION;
 
-        // 2. VERIFICA se o tempo atual já passou do tempo de nascimento deste livro.
-        // Se não, o livro ainda não existe, então pulamos para o próximo.
         if (iTime < birthTime) continue;
 
-        // 3. CALCULA o "tempo de vida" ou "cronômetro pessoal" do livro.
-        // Ele sempre começa em 0.0 no momento do nascimento.
         float localTime = iTime - birthTime;
 
-
-        // Gera um valor aleatório único para cada livro (0.0 a 1.0)
-        // Isso garante que cada livro tenha um comportamento ligeiramente diferente.
         float randomVal = fract(sin(float(i) * 127.1) * 43758.5453);
 
-         // --- Seleção de Cor da Capa (NOVO) ---
         vec3 coverColor;
-        int colorIndex = int(mod(float(i), 4.0)); // Gera uma sequência: 0, 1, 2, 3, 0, 1, 2...
+        int colorIndex = int(mod(float(i), 4.0));
 
         if (colorIndex == 0) {
             coverColor = vec3(0.8, 0.1, 0.1); // Vermelho
@@ -351,149 +341,131 @@ Surface map(vec3 p) {
         } else if (colorIndex == 2) {
             coverColor = vec3(0.9, 0.8, 0.2); // Amarelo
         } else {
-            coverColor = vec3(0.1, 0.2, 0.7); // Azul (o original)
+            coverColor = vec3(0.1, 0.2, 0.7); // Azul
         }
 
-        // --- MOVIMENTO DO LIVRO 'i' ---
+        // Parâmetros do movimento do livro
         const float TRAVEL_DURATION = 4.0;
         const float TRAVEL_WIDTH = 30.0;
-        const float BOBBING_SPEED = 2.5;
-        const float BOBBING_HEIGHT = 0.5;
+        const float WAVE_SPEED = 2.5;
+        const float WAVE_HEIGHT = 0.5;
 
-        // Usa o valor aleatório para dar a cada livro um "start time" diferente no ciclo.
-        // Assim, eles não se movem todos juntos em uma linha perfeita.
         float timeOffset = randomVal * TRAVEL_DURATION;
         float timeInCycle = mod(localTime + timeOffset, TRAVEL_DURATION);
         float progress = timeInCycle / TRAVEL_DURATION;
 
-        // Calcula a posição X
         float startX = TRAVEL_WIDTH / 2.0;
         float endX = -TRAVEL_WIDTH / 2.0;
+
         float x = mix(startX, endX, progress);
-
-        // Calcula a posição Y, com uma variação aleatória na altura base e velocidade
-        float y = sin((localTime * (0.8 + randomVal * 0.4)) * BOBBING_SPEED) * BOBBING_HEIGHT;
-
-        // Varia a profundidade (Z) de cada livro para que passem em planos diferentes
+        float y = sin((localTime * (0.8 + randomVal * 0.4)) * WAVE_SPEED) * WAVE_HEIGHT;
         float z = 20.0 + (randomVal - 0.5) * 15.0;
 
         vec3 bookPos = vec3(x, y, z);
 
-        // O resto da lógica de SDF e rotação que já tínhamos, agora dentro do loop
         float bookAngleX = (localTime + timeOffset) * 1.0;
         float bookAngleY = (localTime + timeOffset) * 1.0;
         vec3 localP_book = rotateX(p - bookPos, -bookAngleX);
         localP_book = rotateY(localP_book, -bookAngleY);    
 
-        // 1. Chamamos a nova função que testa as 6 faces individualmente
         vec2 bookResult = sdBook(localP_book);
-
         if (bookResult.x < s.dist) {
             s.dist = bookResult.x;
-            s.id = 7.0; // ID geral para o objeto livro
+            s.id = 7.0;
 
-            // 2. Colorimos com base no ID da FACE retornado pela função
             float faceID = bookResult.y;
-
-            // IDs 1.0 (Frente), 2.0 (Traseira) e 3.0 (Lombada) são azuis.
+            // Verifica se é capa
             if (faceID == 8.0 || faceID == 9.0 || faceID == 10.0) {
-                s.color = coverColor; // MODIFICADO
+                s.color = coverColor;
             }
-            // Todas as outras faces (4.0, 5.0, 6.0) são brancas.
+            // Ou página
             else {
-                s.color = vec3(0.95, 0.95, 0.9); // Branco (Páginas)
+                s.color = vec3(0.95, 0.95, 0.9); // Branco
             }
         }
     }
 
     
-    // Bolo
-    // --- Parâmetros da Animação do Bolo ---
-    const float CAKE_APPEAR_TIME = 35.0; 
-    const float CAKE_DROP_DURATION = 6.0;
+    // ****************************
+    //            BOLO
+    // ****************************
+    // Parâmetros do bolo
+    const float CAKE_APPEAR_TIME = 35.0;    // Quando o bolo deve aparecer
+    const float CAKE_DROP_DURATION = 6.0;   // Duração da queda dele
 
     float descentFactor = smoothstep(CAKE_APPEAR_TIME, CAKE_APPEAR_TIME + CAKE_DROP_DURATION, iTime);
-
     if (descentFactor > 0.0) {
-        // Posição inicial (no céu) e final (no meio da tela)
-        float startY = 10.0; // Posição inicial bem alta
-        float endY = 0.4;    // ALTERADO: Posição final mais alta, no "meio"
+        float startY = 10.0;    // Começa no topo (fora da tela)
+        float endY = 0.4;       // Termina próximo ao chão
 
         float cakeY = mix(startY, endY, descentFactor);
         vec3 cakePos = vec3(0.0, cakeY, 5.0);
 
         vec3 localP_cake = p - cakePos;
 
-        // --- CORREÇÃO DE ROTAÇÃO ---
-        
-        // Rotação suave em torno de seu próprio eixo Y
         localP_cake = rotateY(localP_cake, iTime * 1.2);
-
-        // NOVO: Rotaciona o bolo 90 graus no eixo X para deixá-lo "em pé" corretamente.
         localP_cake = rotateX(localP_cake, (PI + 0.1) / 2.0);
 
         vec2 cakeResult = sdCake(localP_cake);
-
         if (cakeResult.x < s.dist) {
             s.dist = cakeResult.x;
-            s.id = cakeResult.y; // O ID do material (prato, massa, cobertura...)
+            s.id = cakeResult.y;
             
-            // --- Coloração do Bolo ---
-            if (s.id == 20.0) {       // Prato
+            // Prato
+            if (s.id == 20.0) {
                 s.color = vec3(0.8, 0.8, 0.9);
-            } else if (s.id == 21.0) { // Massa do bolo
+            } 
+            // Camada do bolo
+            else if (s.id == 21.0) {
                 s.color = vec3(0.85, 0.7, 0.45);
-            } else if (s.id == 22.0) { // Cobertura
-                s.color = vec3(0.95, 0.9, 0.92); // Cobertura branca
-            } else if (s.id == 23.0) { // Cera da Vela
-                s.color = vec3(0.9, 0.2, 0.2); // Vela vermelha
-            } else if (s.id == 24.0) { // Chama
-                s.color = vec3(1.0, 0.7, 0.1) * 1.5; // Laranja/amarelo brilhante
+            } 
+            // Cobertura do bolo
+            else if (s.id == 22.0) {
+                s.color = vec3(0.95, 0.9, 0.92);
+            } 
+            // Vela
+            else if (s.id == 23.0) {
+                s.color = vec3(0.9, 0.2, 0.2);
+            } 
+            // Fogo
+            else if (s.id == 24.0) {
+                s.color = vec3(1.0, 0.7, 0.1) * 1.5;
             }
         }
     }
 
 
-    // Placa - 20 anos EACH
+    // ****************************
+    //     PLACA - 20 ANOS EACH
+    // ****************************
+    // Parâmetros da placa
+    const float SIGN_APPEAR_TIME = 35.5;    // Quando a placa deve aparecer
+    const float SIGN_DROP_DURATION = 3.0;   // Duração da queda dela
 
-    // --- PARÂMETROS DE ANIMAÇÃO DA PLACA ---
-    const float SIGN_APPEAR_TIME = 35.5;      // Em segundos. Inicia meio segundo depois do bolo para dar um efeito legal.
-    const float SIGN_DROP_DURATION = 3.0;     // Duração da animação de queda.
 
-
-    // Usa a mesma lógica do bolo, mas com os tempos que definimos para a placa.
     float signDescentFactor = smoothstep(SIGN_APPEAR_TIME, SIGN_APPEAR_TIME + SIGN_DROP_DURATION, iTime);
-
-    // Otimização: Só processa a placa se a animação dela já tiver começado.
     if (signDescentFactor > 0.0) {
-        
-        // 2. DEFINE AS POSIÇÕES INICIAL E FINAL DA ANIMAÇÃO
-        float startY = 12.0;  // Posição inicial Y, bem alta no céu.
-        float endY = 3.0;     // Posição final Y (a que você já tinha definido).
+        float startY = 12.0;  // Começa no topo (fora da tela)
+        float endY = 3.0;     // Termina próximo ao chão
 
-        // 3. CALCULA A POSIÇÃO ATUAL USANDO INTERPOLAÇÃO (mix)
-        // 'mix' vai mover de startY para endY conforme 'signDescentFactor' vai de 0 para 1.
-        float currentY = mix(startY, endY, signDescentFactor);
-        
-        // Posição final da placa, agora com o Y dinâmico.
-        vec3 outdoorPos = vec3(0.0, currentY, 10.0);
+        float signY = mix(startY, endY, signDescentFactor);
+        vec3 signPos = vec3(0.0, signY, 10.0);
 
-        // --- A PARTIR DAQUI, O SEU CÓDIGO ORIGINAL E FUNCIONAL É APLICADO ---
-        vec3 outdoorSize = vec3(6.0, 1.5, 0.1);
-        vec3 localP_outdoor = p - outdoorPos;
-        d = sdBox(localP_outdoor, outdoorSize);
+        vec3 signSize = vec3(6.0, 1.5, 0.1);
+        vec3 localP_sign = p - signPos;
 
+        d = sdBox(localP_sign, signSize);
         if (d < s.dist) {
             s.id = 30.0;
             
             vec3 defaultColor = vec3(0.2);
 
-            if (abs(localP_outdoor.z + outdoorSize.z) < 0.01) {
-                float u = (localP_outdoor.x + outdoorSize.x) / (2.0 * outdoorSize.x);
-                float v = (localP_outdoor.y + outdoorSize.y) / (2.0 * outdoorSize.y);
+            if (abs(localP_sign.z + signSize.z) < 0.01) {
+                float u = (localP_sign.x + signSize.x) / (2.0 * signSize.x);
+                float v = (localP_sign.y + signSize.y) / (2.0 * signSize.y);
                 vec2 uv = vec2(u, 1.0 - v);
-                vec4 texColor = texture(iChannel3, uv);
 
+                vec4 texColor = texture(iChannel3, uv);
                 if (texColor.a < 0.5) {
                     s.dist = d;
                     s.color = vec3(0.1, 0.1, 0.1);
@@ -513,12 +485,17 @@ Surface map(vec3 p) {
     float cameraZ = iTime * SPEED;
     p.z += cameraZ;
 
-    // Plano verde
+
+    // ****************************
+    //         CHÃO - GRAMA
+    // ****************************
     d = sdPlane(p);
     if (d < s.dist) {
         vec2 uv = p.xz * 0.2; 
         uv = fract(uv);
+
         vec3 texColor = texture(iChannel1, uv).rgb;
+
         vec3 greenTint = vec3(0.05, 0.5, 0.1);
         texColor *= greenTint;
 
@@ -527,52 +504,63 @@ Surface map(vec3 p) {
         s.id = 2.0;
     }
 
-    // Estrada cinza com listras brancas
+
+    // ****************************
+    //           ESTRADA
+    // ****************************
     d = sdRoad(p);
     if (d < s.dist) {
         if (abs(p.x) < 0.09) {
-            float zStripe = mod(p.z + iTime, 1.4);
-            float stripeMask = step(0.5, zStripe);
-            s.color = mix(vec3(1.0), vec3(0.1), stripeMask);
+            float stripeCycle = mod(p.z + iTime, 1.4);
+            float colorSwitch = step(0.5, stripeCycle);
+
+            s.color = mix(vec3(1.0), vec3(0.1), colorSwitch);
         } else {
             s.color = vec3(0.1);
         }
+
         s.dist = d;
         s.id = 3.0;
     }
 
 
-    // --- LÓGICA DE DENSIDADE DAS ÁRVORES --- // NOVO
-    // 1. Calcula o progresso da transição de densidade (de 0.0 a 1.0).
+    // ****************************
+    //           ÁRVORES
+    // ****************************
+    // Parâmetros das árvores
+    const float TREE_SPACING = 15.0;         // Espaçamento das árvores
+    const float TREE_START_Z = 30.0;         // Posição Z inicial em que as árvores devem surgir
+    const float TREE_RISE_DISTANCE = 10.0;   // Distância que a árvore leva para crescer completamente
+    const int MIN_TREES = 2;                 // Número inicial de árvores a serem renderizadas
+    const int MAX_TREES = 25;                // Número máximo de árvores
+    const float DENSITY_START_TIME = 3.0;    // Segundo a densidade começa a aumentar
+    const float DENSITY_DURATION = 30.0;     // Duração (em segundos) da transição de poucas para muitas árvores
+    
     float densityProgress = smoothstep(DENSITY_START_TIME, DENSITY_START_TIME + DENSITY_DURATION, iTime);
     
-    // 2. Calcula o número de árvores a renderizar neste frame, interpolando entre o mínimo e o máximo.
     int numTreesToRender = int(mix(float(MIN_TREES), float(MAX_TREES), densityProgress));
-        
-    // Árvores com surgimento suave e densidade progressiva
-    // ALTERADO: O loop agora itera até o máximo possível de árvores.
+
     for (int i = 0; i < MAX_TREES; i++) {
-    
-        // ALTERADO: Pula a iteração se o índice 'i' for maior que o número de árvores a renderizar.
         if (i >= numTreesToRender) continue;
-        
+
         float randomOffset = fract(sin(float(i) * 127.1) * 43758.5453) * 10.0;
         float side = (mod(float(i), 2.0) < 1.0) ? -1.0 : 1.0;
         float roadEdge = 1.5;
         float safeMargin = 0.5;
+
         float xPos = side * (roadEdge + safeMargin + randomOffset);
 
-        // --- LÓGICA DE SURGIMENTO ---
         float zSpacing = TREE_SPACING * (0.8 + randomOffset * 0.4);
         float treeProgressZ = mod(cameraZ + float(i) * zSpacing, TREE_START_Z);
         float riseFactor = smoothstep(0.0, TREE_RISE_DISTANCE, treeProgressZ);
         float treeGrowthFactor = riseFactor * 1.3;
-        float treeY = -1.5; // A base da árvore estará no chão
-        float zPos = (TREE_START_Z + cameraZ) - treeProgressZ;
-        vec3 treePos = vec3(xPos, treeY, zPos);
-        // --- FIM DA LÓGICA ---
 
-        // Passar o growthFactor para a função sdTree
+        float treeY = -1.5;
+
+        float zPos = (TREE_START_Z + cameraZ) - treeProgressZ;
+
+        vec3 treePos = vec3(xPos, treeY, zPos);
+
         Surface tree = sdTree(p, treePos, treeGrowthFactor);
         if (tree.dist < s.dist) {
             s = tree;
@@ -587,7 +575,6 @@ Surface map(vec3 p) {
 // ====================================================
 //                FUNÇÕES AUXILIARES
 // ====================================================
-// Algoritmo principal de ray marching
 Surface rayMarch(vec3 ro, vec3 rd) {
     float totalDist = 0.0;
     Surface result;
@@ -597,29 +584,25 @@ Surface rayMarch(vec3 ro, vec3 rd) {
         Surface s = map(p);
 
         if (s.dist < MIN_DISTANCE) {
-            // Raio colidiu com objeto
             result = s;
             result.dist = totalDist;
+
             return result;
         }
 
         totalDist += s.dist;
-
         if (totalDist > MAX_DISTANCE) {
-            // Raio não colidiu com nenhum objeto visível
             break;
         }
     }
 
-    // Retorna fundo/“céu”
     result.dist = totalDist;
     result.id = -1.0;
-    result.color = vec3(0.0); // preto por padrão
+    result.color = vec3(0.0);
 
     return result;
 }
 
-// Calcula normal aproximada via diferenças centrais
 vec3 getNormal(vec3 p) {
     float d = map(p).dist;
     vec2 e = vec2(0.01, 0);
@@ -632,31 +615,12 @@ vec3 getNormal(vec3 p) {
     return normalize(n);
 }
 
-// Calcula luz difusa com base em uma fonte pontual
-float getLight(vec3 p) {
-    vec3 lightPos = vec3(5, 5, 10); // posição da luz
-
-    vec3 l = normalize(lightPos - p); // vetor da luz
-    vec3 n = getNormal(p);            // normal da superfície
-
-    float diff = clamp(dot(l, n), 0.0, 1.0) * 1.5; // intensidade da luz
-
-    // Cálculo de sombra
-    float shadow = rayMarch(p + n * MIN_DISTANCE * 2.0, l).dist;
-    if (shadow < length(lightPos - p)) diff *= 0.1;
-
-    return diff;
-}
-
-
-// Outra fonte de luz (sol no céu) - agora com ciclo dia/noite
 float getSunLight(vec3 p, float dayAmount) {
-    vec3 sunPosition = vec3(0, mix(5.0, 12.0, dayAmount), -0.3); // posição do sol/lua
+    vec3 sunPosition = vec3(0, mix(5.0, 12.0, dayAmount), -0.3);
     vec3 sunDirection = normalize(sunPosition - p);
     vec3 normalVector = getNormal(p);
 
-    float diffuse = clamp(dot(normalVector, sunDirection), 0.0, 1.0) * 
-                   mix(0.5, 2.0, dayAmount);
+    float diffuse = clamp(dot(normalVector, sunDirection), 0.0, 1.0) * mix(0.5, 2.0, dayAmount);
 
     float shadow = rayMarch(p + normalVector * MIN_DISTANCE * 2.0, sunDirection).dist;
     if (shadow < length(sunPosition - p)) diffuse *= 0.1;
@@ -664,30 +628,25 @@ float getSunLight(vec3 p, float dayAmount) {
     return diffuse;
 }
 
-// Cor do céu baseada no ângulo do raio (gradiente vertical) - agora com ciclo dia/noite
-vec3 skyColor(vec3 rd, float dayAmount) {
+vec3 getSkyColor(vec3 rd, float dayAmount) {
     float t = clamp(0.5 * (rd.y + 1.0), 0.0, 1.0);
     
-    // Cores para o dia
     vec3 dayBottom = vec3(0.8, 0.9, 1.0);
     vec3 dayTop = vec3(0.4, 0.7, 1.0);
     
-    // Cores para a noite
     vec3 nightBottom = vec3(0.05, 0.05, 0.1);
     vec3 nightTop = vec3(0.0, 0.0, 0.03);
     
-    // Mistura entre dia e noite
     vec3 bottomColor = mix(nightBottom, dayBottom, dayAmount);
     vec3 topColor = mix(nightTop, dayTop, dayAmount);
     
     return mix(bottomColor, topColor, t);
 }
 
-// Função para calcular o estado dia/noite (0.0 = noite, 1.0 = dia completo)
 float getDayNightCycle(float time) {
     float cyclePos = mod(time, DAY_DURATION) / DAY_DURATION;
-    float dayAmount = smoothstep(0.0, 0.1, cyclePos) - 
-                     smoothstep(DAY_NIGHT_RATIO, DAY_NIGHT_RATIO+0.1, cyclePos);
+    float dayAmount = smoothstep(0.0, 0.1, cyclePos) - smoothstep(DAY_NIGHT_RATIO, DAY_NIGHT_RATIO+0.1, cyclePos);
+
     return dayAmount;
 }
 
@@ -696,11 +655,9 @@ float getDayNightCycle(float time) {
 // ====================================================
 //                 FUNÇÃO PRINCIPAL
 // ====================================================
-// Função principal que renderiza cada pixel
 void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
 
-    // Calcula a quantidade de dia (0.0 a 1.0)
     float dayAmount = getDayNightCycle(iTime);
     
     vec3 ro = vec3(0, 0, -1);
@@ -711,17 +668,16 @@ void main() {
     vec3 color;
 
     if (s.id < 0.0) {
-        // Céu com ciclo dia/noite
-        color = skyColor(rd, dayAmount);
+        color = getSkyColor(rd, dayAmount);
         
         // Estrelas durante a noite
         if (dayAmount < 0.5) {
             float stars = pow(fract(sin(dot(uv, vec2(12.9898, 78.233))) * 43758.5453), 200.0);
             stars *= smoothstep(0.1, 0.5, 1.0 - dayAmount * 2.0);
+
             color += stars * vec3(1.0);
         }
     } else {
-        // Objetos com iluminação adaptativa
         float diffuse = getSunLight(ro + rd * s.dist, dayAmount);
         float ambient = mix(0.2, 0.05, dayAmount);
         
@@ -730,3 +686,4 @@ void main() {
 
     C = vec4(color, 1.0);
 }
+
