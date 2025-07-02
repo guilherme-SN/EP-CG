@@ -444,7 +444,13 @@ CMakeFiles/RayMarching.dir/RayMarching.cpp.o: \
  /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h \
  /usr/include/c++/13/bits/fstream.tcc /usr/include/c++/13/sstream \
  /usr/include/c++/13/bits/sstream.tcc /usr/include/c++/13/iostream \
- /home/gui/Downloads/CG/EP/stb_image/stb_image.h /usr/include/unistd.h \
+ /home/gui/Downloads/CG/EP/stb_image/stb_image.h \
+ /home/gui/Downloads/CG/EP/stb_image/stb_image_write.h \
+ /usr/include/c++/13/math.h /usr/include/c++/13/vector \
+ /usr/include/c++/13/bits/stl_uninitialized.h \
+ /usr/include/c++/13/bits/stl_vector.h \
+ /usr/include/c++/13/bits/stl_bvector.h \
+ /usr/include/c++/13/bits/vector.tcc /usr/include/unistd.h \
  /usr/include/x86_64-linux-gnu/bits/posix_opt.h \
  /usr/include/x86_64-linux-gnu/bits/environments.h \
  /usr/include/x86_64-linux-gnu/bits/confname.h \

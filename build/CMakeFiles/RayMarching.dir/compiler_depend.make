@@ -159,6 +159,7 @@ CMakeFiles/RayMarching.dir/RayMarching.cpp.o: /home/gui/Downloads/CG/EP/RayMarch
   /home/gui/Downloads/CG/EP/includes/glm/vec3.hpp \
   /home/gui/Downloads/CG/EP/includes/glm/vec4.hpp \
   /home/gui/Downloads/CG/EP/stb_image/stb_image.h \
+  /home/gui/Downloads/CG/EP/stb_image/stb_image_write.h \
   /home/gui/Downloads/CG/RayMarching/includes/glad/glad.h \
   /usr/include/GL/gl.h \
   /usr/include/alloca.h \
@@ -225,12 +226,15 @@ CMakeFiles/RayMarching.dir/RayMarching.cpp.o: /home/gui/Downloads/CG/EP/RayMarch
   /usr/include/c++/13/bits/sstream.tcc \
   /usr/include/c++/13/bits/std_abs.h \
   /usr/include/c++/13/bits/stl_algobase.h \
+  /usr/include/c++/13/bits/stl_bvector.h \
   /usr/include/c++/13/bits/stl_construct.h \
   /usr/include/c++/13/bits/stl_function.h \
   /usr/include/c++/13/bits/stl_iterator.h \
   /usr/include/c++/13/bits/stl_iterator_base_funcs.h \
   /usr/include/c++/13/bits/stl_iterator_base_types.h \
   /usr/include/c++/13/bits/stl_pair.h \
+  /usr/include/c++/13/bits/stl_uninitialized.h \
+  /usr/include/c++/13/bits/stl_vector.h \
   /usr/include/c++/13/bits/streambuf.tcc \
   /usr/include/c++/13/bits/streambuf_iterator.h \
   /usr/include/c++/13/bits/string_view.tcc \
@@ -239,6 +243,7 @@ CMakeFiles/RayMarching.dir/RayMarching.cpp.o: /home/gui/Downloads/CG/EP/RayMarch
   /usr/include/c++/13/bits/uses_allocator.h \
   /usr/include/c++/13/bits/uses_allocator_args.h \
   /usr/include/c++/13/bits/utility.h \
+  /usr/include/c++/13/bits/vector.tcc \
   /usr/include/c++/13/cassert \
   /usr/include/c++/13/cctype \
   /usr/include/c++/13/cerrno \
@@ -301,6 +306,7 @@ CMakeFiles/RayMarching.dir/RayMarching.cpp.o: /home/gui/Downloads/CG/EP/RayMarch
   /usr/include/c++/13/tuple \
   /usr/include/c++/13/type_traits \
   /usr/include/c++/13/typeinfo \
+  /usr/include/c++/13/vector \
   /usr/include/ctype.h \
   /usr/include/endian.h \
   /usr/include/errno.h \
@@ -1085,6 +1091,14 @@ CMakeFiles/RayMarching.dir/stb_image/stb_image.cpp.o: /home/gui/Downloads/CG/EP/
 
 /usr/include/c++/13/ext/type_traits.h:
 
+/usr/include/c++/13/ext/concurrence.h:
+
+/usr/include/x86_64-linux-gnu/bits/types/struct_tm.h:
+
+/usr/include/c++/13/ext/atomicity.h:
+
+/usr/include/c++/13/ext/alloc_traits.h:
+
 /usr/include/stdlib.h:
 
 /home/gui/Downloads/CG/EP/includes/glm/ext/vector_int2.hpp:
@@ -1100,10 +1114,6 @@ CMakeFiles/RayMarching.dir/stb_image/stb_image.cpp.o: /home/gui/Downloads/CG/EP/
 /home/gui/Downloads/CG/EP/includes/glm/ext/vector_double2.hpp:
 
 /usr/include/c++/13/cctype:
-
-/usr/include/x86_64-linux-gnu/bits/types/struct_tm.h:
-
-/usr/include/c++/13/ext/atomicity.h:
 
 /usr/lib/gcc/x86_64-linux-gnu/13/include/xsavesintrin.h:
 
@@ -1147,6 +1157,8 @@ CMakeFiles/RayMarching.dir/stb_image/stb_image.cpp.o: /home/gui/Downloads/CG/EP/
 
 /home/gui/Downloads/CG/EP/includes/glm/mat4x2.hpp:
 
+/usr/include/c++/13/vector:
+
 /home/gui/Downloads/CG/EP/includes/glm/mat3x4.hpp:
 
 /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h:
@@ -1164,6 +1176,8 @@ CMakeFiles/RayMarching.dir/stb_image/stb_image.cpp.o: /home/gui/Downloads/CG/EP/
 /usr/include/x86_64-linux-gnu/bits/types/locale_t.h:
 
 /home/gui/Downloads/CG/EP/includes/glm/detail/type_mat2x4.inl:
+
+/usr/include/c++/13/bits/stl_vector.h:
 
 /home/gui/Downloads/CG/EP/includes/glm/mat4x4.hpp:
 
@@ -1196,6 +1210,8 @@ CMakeFiles/RayMarching.dir/stb_image/stb_image.cpp.o: /home/gui/Downloads/CG/EP/
 /usr/include/c++/13/bits/locale_facets_nonio.tcc:
 
 /home/gui/Downloads/CG/EP/includes/glm/detail/type_vec2.hpp:
+
+/usr/include/c++/13/bits/vector.tcc:
 
 /home/gui/Downloads/CG/EP/includes/glm/detail/func_exponential.inl:
 
@@ -1399,8 +1415,6 @@ CMakeFiles/RayMarching.dir/stb_image/stb_image.cpp.o: /home/gui/Downloads/CG/EP/
 
 /home/gui/Downloads/CG/EP/includes/glm/ext/vector_bool3_precision.hpp:
 
-/usr/include/c++/13/ext/alloc_traits.h:
-
 /home/gui/Downloads/CG/EP/includes/glm/detail/type_mat4x3.inl:
 
 /usr/include/c++/13/bits/sstream.tcc:
@@ -1433,7 +1447,15 @@ CMakeFiles/RayMarching.dir/stb_image/stb_image.cpp.o: /home/gui/Downloads/CG/EP/
 
 /home/gui/Downloads/CG/EP/includes/glm/ext/matrix_double4x2_precision.hpp:
 
+/usr/lib/gcc/x86_64-linux-gnu/13/include/avx512ifmaintrin.h:
+
+/usr/include/c++/13/ext/string_conversions.h:
+
+/home/gui/Downloads/CG/EP/includes/glm/ext/matrix_double3x2.hpp:
+
 /usr/lib/gcc/x86_64-linux-gnu/13/include/wbnoinvdintrin.h:
+
+/usr/include/c++/13/bits/stl_uninitialized.h:
 
 /usr/include/c++/13/bits/new_allocator.h:
 
@@ -1569,6 +1591,8 @@ CMakeFiles/RayMarching.dir/stb_image/stb_image.cpp.o: /home/gui/Downloads/CG/EP/
 
 /home/gui/Downloads/CG/EP/includes/glm/detail/func_integer_simd.inl:
 
+/usr/include/c++/13/bits/stl_bvector.h:
+
 /home/gui/Downloads/CG/EP/includes/glm/detail/func_packing.inl:
 
 /usr/include/c++/13/tr1/poly_laguerre.tcc:
@@ -1608,8 +1632,6 @@ CMakeFiles/RayMarching.dir/stb_image/stb_image.cpp.o: /home/gui/Downloads/CG/EP/
 /home/gui/Downloads/CG/EP/includes/glm/mat2x2.hpp:
 
 /home/gui/Downloads/CG/EP/includes/glm/trigonometric.hpp:
-
-/usr/include/c++/13/ext/concurrence.h:
 
 /usr/lib/gcc/x86_64-linux-gnu/13/include/pmmintrin.h:
 
@@ -1723,6 +1745,8 @@ CMakeFiles/RayMarching.dir/stb_image/stb_image.cpp.o: /home/gui/Downloads/CG/EP/
 
 /usr/include/c++/13/bits/uses_allocator.h:
 
+/home/gui/Downloads/CG/EP/stb_image/stb_image_write.h:
+
 /usr/include/c++/13/bits/predefined_ops.h:
 
 /usr/include/c++/13/bits/ptr_traits.h:
@@ -1782,9 +1806,3 @@ CMakeFiles/RayMarching.dir/stb_image/stb_image.cpp.o: /home/gui/Downloads/CG/EP/
 /home/gui/Downloads/CG/EP/includes/glm/integer.hpp:
 
 /usr/include/c++/13/debug/debug.h:
-
-/usr/lib/gcc/x86_64-linux-gnu/13/include/avx512ifmaintrin.h:
-
-/home/gui/Downloads/CG/EP/includes/glm/ext/matrix_double3x2.hpp:
-
-/usr/include/c++/13/ext/string_conversions.h:

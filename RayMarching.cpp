@@ -3,12 +3,15 @@
 #include <GLFW/glfw3.h>
 #include "Shader.h"
 #include "stb_image/stb_image.h"
-
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image/stb_image_write.h"
+#include <vector>
 #include <fstream>
 #include <iostream>
 #include <string>
 #include <unistd.h>
 #include <filesystem>
+
 
 double lastTime,lt,fps;
 int nbFrames = 0;
@@ -39,6 +42,26 @@ unsigned int indices[] = {
     0,1,3,
     1,2,3
 };
+
+void saveFrame(const char* filename, int width, int height) {
+    // Cria o diretório de saída
+    std::filesystem::create_directory("output");
+
+    // Aloca memória para armazenar os pixels (3 bytes por pixel: R, G, B)
+    std::vector<unsigned char> pixels(width * height * 3);
+
+    // Lê os pixels do framebuffer padrão do OpenGL para a memória
+    glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+
+    stbi_flip_vertically_on_write(true);
+
+    // Salva os dados dos pixels em um arquivo PNG
+    if (!stbi_write_png(filename, width, height, 3, pixels.data(), width * 3)) {
+        std::cerr << "ERRO: Nao foi possivel salvar o frame " << filename << std::endl;
+    } else {
+        std::cout << "Frame salvo: " << filename << std::endl;
+    }
+}
 
 int main()
 {
@@ -395,54 +418,120 @@ int main()
     ////////////////////
     //  RENDER LOOP   //
     ////////////////////
-    while(!glfwWindowShouldClose(window)){
-        currentTime = static_cast<float>(glfwGetTime());
-        //Renderizando para o framebuffer criado
 
-        processInput(window,mouse, &shouldDraw, & press);
+    const bool saveToFileMode = true;
+    if (saveToFileMode) {
+        std::cout << "Iniciando salvamento de frames" << std::endl;
 
+        float durationInSeconds = 45.0f; // Duração total da animação a ser salva
+        int fps = 60;
+        int totalFrames = static_cast<int>(durationInSeconds * fps);
+        float timeStep = 1.0f / fps;
 
-        //glEnable(GL_DEPTH_TEST);
-
-        if(shouldDraw)
+        for (int frame = 0; frame < totalFrames; ++frame)
         {
+            float currentTime = frame * timeStep; // Calcula o tempo manualmente
 
-            glBindFramebuffer(GL_FRAMEBUFFER,FBO_0);
-
-            // make sure we clear the framebuffer's content
+            glBindFramebuffer(GL_FRAMEBUFFER, FBO_0);
             glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-            //glClear( GL_DEPTH_BUFFER_BIT);
-            //Utilização de um segundo shader para calcular vizinhança
+            glClear(GL_COLOR_BUFFER_BIT);
+
             Imageprogram.use();
-            Imageprogram.setSampler("iChannel0",0);
-            //Imageprogram.setSampler("iChannel1",1);
-            Imageprogram.setVec2("iResolution",resolution) ;
-            Imageprogram.setVec4("iMouse", mouse);
-            Imageprogram.setFloat("iTime",currentTime);
-            Imageprogram.setInt("iFrame",frame);
-            glBindVertexArray(VAO);
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, iChannel_0);
+            Imageprogram.setVec2("iResolution", resolution);
+            Imageprogram.setFloat("iTime", currentTime);
+            Imageprogram.setInt("iFrame", frame);
+
+            double mouse_data[4] = {0.0, 0.0, 0.0, 0.0};
+            Imageprogram.setVec4("iMouse", mouse_data);
 
             Imageprogram.setSampler("iChannel1", 1);
             glActiveTexture(GL_TEXTURE1);
-            glBindTexture(GL_TEXTURE_2D, imageTexture0);
+            glBindTexture(GL_TEXTURE_2D, imageTexture0); // grama2.png
 
             Imageprogram.setSampler("iChannel2", 2);
             glActiveTexture(GL_TEXTURE2);
-            glBindTexture(GL_TEXTURE_2D, imageTexture1);
+            glBindTexture(GL_TEXTURE_2D, imageTexture1); // mosaico.png
 
             Imageprogram.setSampler("iChannel3", 3);
             glActiveTexture(GL_TEXTURE3);
-            glBindTexture(GL_TEXTURE_2D, imageTexture2);
+            glBindTexture(GL_TEXTURE_2D, imageTexture2); // 20anos.png
 
-            //glActiveTexture(GL_TEXTURE1);
-            //glBindTexture(GL_TEXTURE_2D, iChannel_3);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT,0);
-            //glBindVertexArray(0);
-            //  glUseProgram(0);
+            glBindVertexArray(VAO);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-            /*glBindFramebuffer(GL_FRAMEBUFFER, FBO_1);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT);
+
+            Imageprogram.use();
+            Imageprogram.setSampler("iChannel0", 0);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, iChannel_0);
+
+            glBindVertexArray(VAO);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+
+            // Salva o frame que está agora na tela
+            char filename[256];
+            // Salva os arquivos na pasta "output" com nomes sequenciais
+            sprintf(filename, "output/frame_%04d.png", frame);
+            saveFrame(filename, SCR_WIDTH, SCR_HEIGHT);
+
+            glfwSwapBuffers(window);
+            glfwPollEvents();
+        }
+
+        std::cout << "Frames salvos com sucesso" << std::endl;
+    } else {
+        while(!glfwWindowShouldClose(window)){
+            currentTime = static_cast<float>(glfwGetTime());
+            //Renderizando para o framebuffer criado
+
+            processInput(window,mouse, &shouldDraw, & press);
+
+
+            //glEnable(GL_DEPTH_TEST);
+
+            if(shouldDraw)
+            {
+
+                glBindFramebuffer(GL_FRAMEBUFFER,FBO_0);
+
+                // make sure we clear the framebuffer's content
+                glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+                //glClear( GL_DEPTH_BUFFER_BIT);
+                //Utilização de um segundo shader para calcular vizinhança
+                Imageprogram.use();
+                Imageprogram.setSampler("iChannel0",0);
+                //Imageprogram.setSampler("iChannel1",1);
+                Imageprogram.setVec2("iResolution",resolution) ;
+                Imageprogram.setVec4("iMouse", mouse);
+                Imageprogram.setFloat("iTime",currentTime);
+                Imageprogram.setInt("iFrame",frame);
+                glBindVertexArray(VAO);
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, iChannel_0);
+
+                Imageprogram.setSampler("iChannel1", 1);
+                glActiveTexture(GL_TEXTURE1);
+                glBindTexture(GL_TEXTURE_2D, imageTexture0);
+
+                Imageprogram.setSampler("iChannel2", 2);
+                glActiveTexture(GL_TEXTURE2);
+                glBindTexture(GL_TEXTURE_2D, imageTexture1);
+
+                Imageprogram.setSampler("iChannel3", 3);
+                glActiveTexture(GL_TEXTURE3);
+                glBindTexture(GL_TEXTURE_2D, imageTexture2);
+
+                //glActiveTexture(GL_TEXTURE1);
+                //glBindTexture(GL_TEXTURE_2D, iChannel_3);
+                glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT,0);
+                //glBindVertexArray(0);
+                //  glUseProgram(0);
+
+                /*glBindFramebuffer(GL_FRAMEBUFFER, FBO_1);
 
          // make sure we clear the framebuffer's content
          glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
@@ -515,55 +604,56 @@ int main()
 
 
 
-            //Renderizando para a tela
-            glBindFramebuffer(GL_FRAMEBUFFER, 0);
-            //glDisable(GL_DEPTH_TEST);
-            glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-            glClear(GL_COLOR_BUFFER_BIT);
-            /*   TVShaderprogram.use();
+                //Renderizando para a tela
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                //glDisable(GL_DEPTH_TEST);
+                glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+                glClear(GL_COLOR_BUFFER_BIT);
+                /*   TVShaderprogram.use();
             TVShaderprogram.setFloat("iTime",currentTime);
             DisplayFramebufferTexture(iChannel_1,&TVShaderprogram,TV_VAO,resolution);*/
 
 
-            Imageprogram.use();
+                Imageprogram.use();
 
 
-            glBindVertexArray(VAO);
-            Imageprogram.setVec2("iResolution",resolution) ;
-            Imageprogram.setSampler("iChannel0",0);
-            //Imageprogram.setSampler("iChannel1",1);
-            // Imageprogram.setSampler("iChannel2",2);
-            //Imageprogram.setSampler("iChannel3",3);
-            Imageprogram.setFloat("iTime",currentTime);
-            Imageprogram.setVec4("iMouse", mouse);
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, iChannel_0);
-            //glActiveTexture(GL_TEXTURE1);
-            //glBindTexture(GL_TEXTURE_2D, iChannel_1);
-            //glActiveTexture(GL_TEXTURE2);
-            //glBindTexture(GL_TEXTURE_2D, iChannel_1);
-            //glActiveTexture(GL_TEXTURE3);
-            //glBindTexture(GL_TEXTURE_2D, iChannel_2);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT,0);
-            //glBindVertexArray(0);
-            //glUseProgram(0);
-            double CurrentTime = glfwGetTime();
-            double past = CurrentTime - lt;
-            if(past>0.1) {
+                glBindVertexArray(VAO);
+                Imageprogram.setVec2("iResolution",resolution) ;
+                Imageprogram.setSampler("iChannel0",0);
+                //Imageprogram.setSampler("iChannel1",1);
+                // Imageprogram.setSampler("iChannel2",2);
+                //Imageprogram.setSampler("iChannel3",3);
+                Imageprogram.setFloat("iTime",currentTime);
+                Imageprogram.setVec4("iMouse", mouse);
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, iChannel_0);
+                //glActiveTexture(GL_TEXTURE1);
+                //glBindTexture(GL_TEXTURE_2D, iChannel_1);
+                //glActiveTexture(GL_TEXTURE2);
+                //glBindTexture(GL_TEXTURE_2D, iChannel_1);
+                //glActiveTexture(GL_TEXTURE3);
+                //glBindTexture(GL_TEXTURE_2D, iChannel_2);
+                glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT,0);
+                //glBindVertexArray(0);
+                //glUseProgram(0);
+                double CurrentTime = glfwGetTime();
+                double past = CurrentTime - lt;
+                if(past>0.1) {
 
-                fps = (float)nbFrames/past;
-                sprintf(title_string, "EP - FPS = %.i ", (int)fps);
-                glfwSetWindowTitle(window, title_string);
-                lt+=past;
-                nbFrames = 0;
+                    fps = (float)nbFrames/past;
+                    sprintf(title_string, "EP - FPS = %.i ", (int)fps);
+                    glfwSetWindowTitle(window, title_string);
+                    lt+=past;
+                    nbFrames = 0;
+                }
+                nbFrames++;
+                frame++;
             }
-            nbFrames++;
-            frame++;
+            glfwSwapBuffers(window);
+            glfwPollEvents();
+
+
         }
-        glfwSwapBuffers(window);
-        glfwPollEvents();
-
-
     }
 
     glDeleteVertexArrays(1, &VAO);
