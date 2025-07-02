@@ -187,6 +187,7 @@ vec2 sdCake(vec3 p) {
         float candleHeight = 0.2 * scale;
         float candleRadius = 0.03 * scale;
         float flameRadius = 0.03 * scale;
+
         d = sdVerticalCylinder(localP_candle - vec3(0, candleHeight, 0), candleHeight, candleRadius);
         if (d < res.x) res = vec2(d, 23.0);
         
@@ -258,21 +259,21 @@ Surface map(vec3 p) {
     float riseSpeed = 0.35;
     float maxY = -1.0;
     float startY = -14.0;
-    float cubeY = min(maxY, startY + iTime * riseSpeed);
-    vec3 cubePos = vec3(0.0, cubeY, 30.0);
-    vec3 cubeSize = vec3(3.7, 10.0, 2.0);
+    float buildingY = min(maxY, startY + iTime * riseSpeed);
+    vec3 buildingPos = vec3(0.0, buildingY, 30.0);
+    vec3 buildingSize = vec3(3.7, 10.0, 2.0);
 
-    vec3 localP = p - cubePos;
+    vec3 localP = p - buildingPos;
 
     float rotationAngle = -0.5;
     mat2 rotationMatrix = mat2(cos(rotationAngle), -sin(rotationAngle), sin(rotationAngle),  cos(rotationAngle));
 
     localP.xz = rotationMatrix * localP.xz;
 
-    d = sdBox(localP, cubeSize);
+    d = sdBox(localP, buildingSize);
     if (d < s.dist) {
-        float u = (localP.x + cubeSize.x) / (2.0 * cubeSize.x);
-        float v = (localP.y + cubeSize.y) / (2.0 * cubeSize.y);
+        float u = (localP.x + buildingSize.x) / (2.0 * buildingSize.x);
+        float v = (localP.y + buildingSize.y) / (2.0 * buildingSize.y);
 
         vec2 uv = vec2(u, v); 
         vec3 texColor = texture(iChannel2, uv).rgb;
@@ -288,16 +289,18 @@ Surface map(vec3 p) {
     //            LUA
     // ****************************
     float cyclePos = mod(iTime, DAY_DURATION) / DAY_DURATION;
+    
+    // Calcula o progresso da noite (0.0 = dia/pôr do sol, 1.0 = noite)
     float nightProgress = clamp((cyclePos - DAY_NIGHT_RATIO) / (1.0 - DAY_NIGHT_RATIO), 0.0, 1.0);
     if (nightProgress > 0.0) {
         float horizonY = -3.5;
-        float peakY = 12.0; 
+        float maxMoonY = 12.0; 
         float arcRadiusX = 22.0;
         float angle = nightProgress * PI;
 
         vec3 moonPos;
         moonPos.x = cos(angle) * arcRadiusX;
-        moonPos.y = mix(horizonY, peakY, sin(angle));
+        moonPos.y = mix(horizonY, maxMoonY, sin(angle));
         moonPos.z = 35.0;
 
         d = sdSphere(p, vec4(moonPos, 1.5));
@@ -318,11 +321,8 @@ Surface map(vec3 p) {
     const float BOOK_DENSITY_START_TIME = 3.0;  // Segundo em que a densidade começa a aumentar
     const float BOOK_DENSITY_DURATION = 30.0;   // Duração da transição
 
-    float bookDensityProgress = smoothstep(BOOK_DENSITY_START_TIME, BOOK_DENSITY_START_TIME + BOOK_DENSITY_DURATION, iTime);
-    
-    int numBooksToRender = int(mix(float(MIN_BOOKS), float(MAX_BOOKS), bookDensityProgress));
-
     for (int i = 0; i < MAX_BOOKS; i++) {
+        // Calcula o tempo de nascimento de cada livro distribuindo ao longo da duração
         float birthTime = BOOK_DENSITY_START_TIME + (float(i) / float(MAX_BOOKS - 1)) * BOOK_DENSITY_DURATION;
 
         if (iTime < birthTime) continue;
@@ -495,9 +495,7 @@ Surface map(vec3 p) {
         uv = fract(uv);
 
         vec3 texColor = texture(iChannel1, uv).rgb;
-
-        vec3 greenTint = vec3(0.05, 0.5, 0.1);
-        texColor *= greenTint;
+        texColor *= vec3(0.05, 0.5, 0.1); // Aplica um tom esverdeado na textura
 
         s.color = texColor;
         s.dist = d;
@@ -535,15 +533,17 @@ Surface map(vec3 p) {
     const int MAX_TREES = 25;                // Número máximo de árvores
     const float DENSITY_START_TIME = 3.0;    // Segundo a densidade começa a aumentar
     const float DENSITY_DURATION = 30.0;     // Duração (em segundos) da transição de poucas para muitas árvores
-    
+
     float densityProgress = smoothstep(DENSITY_START_TIME, DENSITY_START_TIME + DENSITY_DURATION, iTime);
-    
+
     int numTreesToRender = int(mix(float(MIN_TREES), float(MAX_TREES), densityProgress));
 
     for (int i = 0; i < MAX_TREES; i++) {
         if (i >= numTreesToRender) continue;
 
         float randomOffset = fract(sin(float(i) * 127.1) * 43758.5453) * 10.0;
+        
+        // Alterna a árvore entre o lado esquerdo (-1.0) e direito (1.0) da estrada
         float side = (mod(float(i), 2.0) < 1.0) ? -1.0 : 1.0;
         float roadEdge = 1.5;
         float safeMargin = 0.5;
@@ -551,7 +551,11 @@ Surface map(vec3 p) {
         float xPos = side * (roadEdge + safeMargin + randomOffset);
 
         float zSpacing = TREE_SPACING * (0.8 + randomOffset * 0.4);
+
+        // Cria um loop infinito de árvores que se movem em direção à câmera
         float treeProgressZ = mod(cameraZ + float(i) * zSpacing, TREE_START_Z);
+
+        // Faz a árvore nascer do chão
         float riseFactor = smoothstep(0.0, TREE_RISE_DISTANCE, treeProgressZ);
         float treeGrowthFactor = riseFactor * 1.3;
 
@@ -658,6 +662,7 @@ float getDayNightCycle(float time) {
 void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
 
+    // Calcula o fator de dia/noite (0.0 = noite, 1.0 = dia)
     float dayAmount = getDayNightCycle(iTime);
     
     vec3 ro = vec3(0, 0, -1);
@@ -667,6 +672,7 @@ void main() {
 
     vec3 color;
 
+    // Se não atingir nada, é parte do céu
     if (s.id < 0.0) {
         color = getSkyColor(rd, dayAmount);
         
@@ -677,7 +683,9 @@ void main() {
 
             color += stars * vec3(1.0);
         }
-    } else {
+    } 
+    // Se atingir um objeto
+    else {
         float diffuse = getSunLight(ro + rd * s.dist, dayAmount);
         float ambient = mix(0.2, 0.05, dayAmount);
         
